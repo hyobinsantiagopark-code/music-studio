@@ -1,0 +1,3618 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Music Studio</title>
+<meta name="description" content="Make music in your browser - 64 instruments, an 18 piece drum kit, a multitrack timeline and a real equaliser.">
+<meta name="theme-color" content="#15171c">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><text y='19' font-size='19'>&#127925;</text></svg>">
+<style>/* Music Studio for the web - same palette as the desktop app */
+:root{
+  --bg:#15171c; --panel:#1d2027; --grid:#2a2f3a; --grid-hi:#3a4152;
+  --fg:#e8eaed; --dim:#878d9b; --accent:#4da3ff; --danger:#e0645f;
+  --head:56px; --tools:46px; --names:150px; --track:74px; --ruler:26px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+button,.mini,.toolbar{touch-action:manipulation}       /* no 300ms tap delay */
+body{
+  margin:0;background:var(--bg);color:var(--fg);overflow:hidden;
+  overscroll-behavior:none;                            /* no rubber-band bounce */
+  padding:env(safe-area-inset-top) env(safe-area-inset-right)
+          env(safe-area-inset-bottom) env(safe-area-inset-left);
+  font:14px/1.45 ui-sans-serif,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  display:flex;flex-direction:column;
+}
+button,input,select{font:inherit;color:inherit}
+button{
+  background:var(--grid);border:1px solid transparent;border-radius:7px;
+  padding:7px 12px;cursor:pointer;white-space:nowrap;transition:background .12s,border-color .12s;
+}
+button:hover:not(:disabled){background:var(--grid-hi)}
+button:disabled{opacity:.38;cursor:default}
+button.primary{background:var(--accent);color:#08121e;font-weight:600}
+button.primary:hover:not(:disabled){background:#68b2ff}
+button.ghost{background:transparent;border-color:var(--grid-hi)}
+button.ghost:hover:not(:disabled){background:var(--grid)}
+button.danger:hover:not(:disabled){background:#4a2a2e;border-color:var(--danger)}
+input[type=text],input[type=number],select{
+  background:var(--bg);border:1px solid var(--grid-hi);border-radius:6px;padding:6px 8px;
+}
+input:focus,select:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+
+/* ---------- header ---------- */
+header{
+  height:var(--head);flex:0 0 auto;display:flex;align-items:center;gap:14px;
+  padding:0 14px;background:var(--panel);border-bottom:1px solid var(--grid);
+}
+.brand{display:flex;align-items:center;gap:9px;font-weight:650;letter-spacing:.2px}
+.brand svg{width:20px;height:20px;color:var(--accent);flex:0 0 auto}
+.transport{display:flex;align-items:center;gap:7px}
+.transport button{padding:7px 10px;display:flex;align-items:center}
+.clock{font-variant-numeric:tabular-nums;font-size:15px;color:var(--dim);min-width:88px}
+.clock b{color:var(--fg);font-weight:600}
+.spring{flex:1 1 auto}
+.field{display:flex;align-items:center;gap:6px;color:var(--dim);font-size:13px}
+.field input[type=number]{width:62px}
+.field input[type=range]{width:96px;accent-color:var(--accent)}
+
+/* engine status */
+.engine{
+  display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--dim);
+  background:var(--bg);border:1px solid var(--grid);border-radius:999px;padding:5px 11px;
+}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--dim);flex:0 0 auto}
+.engine.loading .dot{background:#d8a13c;animation:pulse 1.1s ease-in-out infinite}
+.engine.ready   .dot{background:#4bbf73}
+.engine.failed  .dot{background:var(--danger)}
+@keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}
+
+/* ---------- toolbar ---------- */
+.toolbar{
+  height:var(--tools);flex:0 0 auto;display:flex;align-items:center;gap:6px;
+  padding:0 12px;background:var(--panel);border-bottom:1px solid var(--grid);
+  overflow-x:auto;scrollbar-width:none;
+}
+.toolbar::-webkit-scrollbar{display:none}
+.toolbar .sep{width:1px;height:22px;background:var(--grid);margin:0 5px;flex:0 0 auto}
+.toolbar button{padding:6px 11px;font-size:13.5px}
+
+/* ---------- workspace ---------- */
+.stage{flex:1 1 auto;display:flex;min-height:0;position:relative}
+.names{
+  width:var(--names);flex:0 0 auto;background:var(--panel);
+  border-right:1px solid var(--grid);overflow:hidden;position:relative;
+}
+.names .pad{height:var(--ruler);border-bottom:1px solid var(--grid)}
+.trk{
+  height:var(--track);border-bottom:1px solid var(--grid);padding:7px 9px;
+  display:flex;flex-direction:column;gap:5px;justify-content:center;cursor:pointer;
+}
+.trk.on{background:#232732;box-shadow:inset 3px 0 0 var(--accent)}
+.trk .nm{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trk .row{display:flex;align-items:center;gap:5px}
+.trk .row input[type=range]{flex:1;min-width:0;accent-color:var(--accent);height:18px}
+.mini{
+  font-size:10.5px;padding:2px 6px;border-radius:5px;background:var(--grid);
+  border:1px solid transparent;cursor:pointer;line-height:1.4;
+}
+.mini.hot{background:var(--accent);color:#08121e;font-weight:700}
+.mini.solo.hot{background:#d8a13c}
+.scroller{flex:1 1 auto;overflow:auto;position:relative;
+  -webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+canvas#grid{display:block}
+
+/* ---------- dialogs ---------- */
+.veil{
+  position:fixed;inset:0;background:rgba(8,10,14,.72);display:flex;
+  align-items:center;justify-content:center;padding:16px;z-index:40;
+}
+.veil[hidden]{display:none}
+.sheet{
+  background:var(--panel);border:1px solid var(--grid-hi);border-radius:13px;
+  max-width:min(940px,100%);max-height:100%;display:flex;flex-direction:column;
+  box-shadow:0 22px 60px rgba(0,0,0,.55);overflow:hidden;
+}
+.sheet h2{margin:0;font-size:16px;font-weight:650}
+.sheet .top{
+  display:flex;align-items:center;gap:12px;padding:13px 16px;
+  border-bottom:1px solid var(--grid);flex-wrap:wrap;
+}
+.sheet .body{padding:14px 16px;overflow:auto;flex:1 1 auto}
+.sheet .foot{
+  display:flex;align-items:center;gap:8px;padding:12px 16px;
+  border-top:1px solid var(--grid);flex-wrap:wrap;
+}
+.hint{color:var(--dim);font-size:12.5px}
+#rollWrap{overflow:auto;border:1px solid var(--grid);border-radius:9px;background:var(--bg);
+  -webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+#roll{display:block}
+
+/* EQ */
+.eqrow{display:flex;gap:10px;align-items:flex-end;justify-content:space-between;padding:6px 0 2px}
+.eqband{display:flex;flex-direction:column;align-items:center;gap:6px;flex:1}
+.eqband input{
+  writing-mode:vertical-lr;direction:rtl;width:26px;height:132px;accent-color:var(--accent);
+}
+.eqband span{font-size:10.5px;color:var(--dim);font-variant-numeric:tabular-nums}
+
+/* toast */
+#toast{
+  position:fixed;left:50%;bottom:22px;transform:translate(-50%,14px);
+  background:var(--panel);border:1px solid var(--grid-hi);border-radius:9px;
+  padding:9px 15px;font-size:13.5px;z-index:60;opacity:0;pointer-events:none;
+  transition:opacity .18s,transform .18s;max-width:calc(100% - 32px);
+}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* first-run splash over the canvas only */
+.empty{
+  position:absolute;inset:var(--ruler) 0 0 0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:12px;color:var(--dim);
+  text-align:center;padding:20px;pointer-events:none;
+}
+.empty[hidden]{display:none}
+.empty b{color:var(--fg);font-size:15px;font-weight:600}
+.empty .keys{font-size:12.5px;line-height:1.9}
+kbd{
+  background:var(--grid);border:1px solid var(--grid-hi);border-bottom-width:2px;
+  border-radius:5px;padding:1px 6px;font:inherit;font-size:11.5px;
+}
+
+/* ---------- phones ---------- */
+@media (max-width:760px){
+  :root{--names:126px;--track:80px;--head:auto}
+  header{height:auto;flex-wrap:wrap;gap:9px;padding:9px 11px}
+  .brand span{display:none}
+  /* fingers are not mouse pointers: keep every control at least 44px */
+  header button{min-height:44px}
+  .transport button{min-width:44px;padding:10px 14px;justify-content:center}
+  .toolbar{height:auto;padding:5px 10px}
+  .toolbar button{min-height:40px;padding:9px 12px}
+  .mini{min-width:30px;min-height:28px;font-size:12px}
+  /* a slider squeezed next to M and S is too small to drag: give it a row */
+  .trk{gap:3px;padding:6px 8px}
+  .trk .row{flex-wrap:wrap}
+  .trk .row input[type=range]{flex:1 0 100%;height:22px}
+  /* iOS zooms the whole page when a field under 16px takes focus */
+  input[type=text],input[type=number],select{font-size:16px}
+  .sheet .top{gap:8px;padding:11px 13px}
+  .sheet .body{padding:10px 12px}
+  .sheet .foot{padding:10px 12px;gap:7px}
+  .sheet .foot .hint{order:9;flex-basis:100%}
+  .veil{padding:0}
+  .sheet{max-width:100%;height:100%;border-radius:0;border:0}
+  .field{font-size:12.5px}
+  /* keep the toast clear of the dialog footer it would otherwise cover */
+  #toast{bottom:calc(84px + env(safe-area-inset-bottom));left:12px;right:12px;
+         transform:translateY(12px);max-width:none;text-align:center}
+  #toast.show{transform:translateY(0)}
+  #rollWrap{max-height:none}
+  .sheet .body{display:flex}
+  #rollWrap{flex:1 1 auto;align-self:flex-start;max-width:100%}
+  .clock{min-width:74px;font-size:14px}
+  .field.hide-sm{display:none}
+  .sheet{max-height:100%;width:100%;border-radius:11px}
+  .eqband input{height:104px}
+}
+@media (max-width:440px){
+  .engine .txt{display:none}
+  .engine{padding:5px 8px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+         stroke-linecap="round" aria-hidden="true">
+      <path d="M3 12h2M7 8v8M11 5v14M15 9v6M19 11h2"/>
+    </svg>
+    <span>Music Studio</span>
+  </div>
+
+  <div class="transport">
+    <button id="bPlay" class="primary" title="Play / pause (Space)" aria-label="Play">
+      <svg id="icPlay" width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+        <path d="M4 2.5v11l9-5.5z"/></svg>
+    </button>
+    <button id="bStop" class="ghost" title="Stop and rewind (Esc)" aria-label="Stop">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+        <rect x="3.5" y="3.5" width="9" height="9" rx="1.3"/></svg>
+    </button>
+  </div>
+  <div class="clock"><b id="clock">0:00.0</b> <span id="total">/ 0:00</span></div>
+
+  <div class="spring"></div>
+
+  <label class="field hide-sm">BPM
+    <input id="bpm" type="number" min="40" max="240" step="1" value="110">
+  </label>
+  <label class="field hide-sm">Volume
+    <input id="vol" type="range" min="0" max="100" value="85">
+  </label>
+  <button id="bEq" class="ghost" title="Master equaliser">EQ</button>
+  <div class="engine loading" id="engine" role="status" aria-live="polite">
+    <span class="dot"></span><span class="txt" id="engineTxt">Starting the sound engine</span>
+  </div>
+</header>
+
+<div class="toolbar">
+  <button id="bMel">+ Instrument</button>
+  <button id="bDrum">+ Drums</button>
+  <button id="bImport">Import audio</button>
+  <button id="bRec">● Record</button>
+  <span class="sep"></span>
+  <button id="bSplit" title="Split the clip under the playhead in two (B)">Split</button>
+  <button id="bDup" title="Duplicate (D)">Duplicate</button>
+  <button id="bDel" class="danger" title="Delete (Del)">Delete</button>
+  <span class="sep"></span>
+  <button id="bUndo" title="Undo (Ctrl+Z)">Undo</button>
+  <button id="bRedo" title="Redo (Ctrl+Shift+Z)">Redo</button>
+  <span class="sep"></span>
+  <button id="bTrack" class="ghost">+ Track</button>
+  <button id="bWav" class="ghost">Export</button>
+  <button id="bConv" class="ghost">Convert</button>
+  <button id="bSave" class="ghost">Save</button>
+  <button id="bOpen" class="ghost">Open</button>
+  <input id="fileAudio" type="file" accept="audio/*" multiple hidden>
+  <input id="fileProj"  type="file" accept=".json,application/json" hidden>
+  <input id="fileConv"  type="file" accept="audio/*,video/*" multiple hidden>
+</div>
+
+<div class="stage">
+  <div class="names" id="names"><div class="pad"></div><div id="nameList"></div></div>
+  <div class="scroller" id="scroller">
+    <canvas id="grid"></canvas>
+    <div class="empty" id="empty">
+      <b>Nothing on the timeline yet</b>
+      <div>Start with <strong>+ Instrument</strong> or <strong>+ Drums</strong>, or drop an audio file anywhere.</div>
+      <div class="keys">
+        <kbd>Space</kbd> play &nbsp; <kbd>B</kbd> split &nbsp; <kbd>D</kbd> duplicate &nbsp;
+        <kbd>Del</kbd> delete &nbsp; <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- pattern editor ------------------------------------------------------ -->
+<div class="veil" id="rollVeil" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="rollTitle">
+    <div class="top">
+      <h2 id="rollTitle">Write a part</h2>
+      <label class="field" id="instrField">Instrument
+        <select id="instr"></select>
+      </label>
+      <label class="field">Bars <input id="bars" type="number" min="1" max="16" value="1"></label>
+      <label class="field">Split beat into <select id="div">
+        <option value="1">1</option><option value="2">2</option>
+        <option value="4" selected>4</option><option value="8">8</option></select>
+      </label>
+      <label class="field" id="octField">Octave
+        <select id="oct"><option>1</option><option>2</option><option selected>3</option>
+        <option>4</option><option>5</option></select>
+      </label>
+      <label class="field"><input id="preview" type="checkbox" checked> Hear notes</label>
+    </div>
+    <div class="body"><div id="rollWrap"><canvas id="roll"></canvas></div></div>
+    <div class="foot">
+      <button id="rollAdd" class="primary">Add to timeline</button>
+      <button id="rollClear" class="ghost">Clear</button>
+      <span class="spring"></span>
+      <span class="hint" id="rollHint">Click the grid to place notes. Drag to paint.</span>
+      <button id="rollClose" class="ghost">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- equaliser ----------------------------------------------------------- -->
+<div class="veil" id="eqVeil" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="eqTitle">
+    <div class="top">
+      <h2 id="eqTitle">Master equaliser</h2>
+      <label class="field">Preset <select id="eqPreset"></select></label>
+      <label class="field"><input id="eqOn" type="checkbox"> On</label>
+    </div>
+    <div class="body">
+      <div class="eqrow" id="eqRow"></div>
+      <p class="hint" id="eqNote">The equaliser runs the same filter the desktop app uses, so it costs a
+        moment of rendering when you press play.</p>
+    </div>
+    <div class="foot">
+      <button id="eqFlat" class="ghost">Reset to flat</button>
+      <span class="spring"></span>
+      <button id="eqClose" class="primary">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- microphone ---------------------------------------------------------- -->
+<div class="veil" id="recVeil" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="recTitle">
+    <div class="top"><h2 id="recTitle">Record from your microphone</h2></div>
+    <div class="body">
+      <p class="hint" id="recState">Your browser will ask for permission the first time.</p>
+      <div style="display:flex;align-items:center;gap:14px;margin:14px 0">
+        <button id="recGo" class="primary">Start recording</button>
+        <span id="recClock" style="font-variant-numeric:tabular-nums;font-size:19px">0:00</span>
+      </div>
+      <canvas id="recMeter" width="520" height="54"
+              style="width:100%;max-width:520px;height:54px;border-radius:8px;background:#15171c"></canvas>
+      <p class="hint" id="recNote" style="margin-top:12px"></p>
+    </div>
+    <div class="foot">
+      <button id="recKeep" class="primary" disabled>Add to timeline</button>
+      <span class="spring"></span>
+      <button id="recClose" class="ghost">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- export --------------------------------------------------------------- -->
+<div class="veil" id="expVeil" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="expTitle">
+    <div class="top">
+      <h2 id="expTitle">Export your mix</h2>
+      <label class="field">Format <select id="expFmt">
+        <option value="wav">WAV &mdash; audio, uncompressed</option>
+        <option value="webm-audio">WebM &mdash; audio, compressed</option>
+        <option value="webm-video">WebM &mdash; video with a waveform</option>
+      </select></label>
+    </div>
+    <div class="body">
+      <div id="expPic" hidden>
+        <label class="field">Picture <select id="expPicKind">
+          <option value="moving">A waveform that moves with the music</option>
+          <option value="static">A still waveform of the whole song</option>
+          <option value="plain">Just a plain background</option>
+        </select></label>
+        <label class="field" style="margin-top:8px">Size <select id="expSize">
+          <option value="854x480">854 x 480</option>
+          <option value="1280x720" selected>1280 x 720</option>
+          <option value="1920x1080">1920 x 1080</option>
+        </select></label>
+      </div>
+      <p class="hint" id="expNote" style="margin-top:12px"></p>
+      <div id="expBar" hidden style="margin-top:12px;height:6px;border-radius:99px;background:#2a2f3a">
+        <div id="expFill" style="height:100%;width:0;border-radius:99px;background:#4da3ff"></div>
+      </div>
+    </div>
+    <div class="foot">
+      <button id="expGo" class="primary">Export</button>
+      <span class="spring"></span>
+      <button id="expClose" class="ghost">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- converter ------------------------------------------------------------ -->
+<div class="veil" id="convVeil" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="convTitle">
+    <div class="top">
+      <h2 id="convTitle">Convert files</h2>
+      <label class="field">Into <select id="convFmt">
+        <option value="wav">WAV &mdash; audio, uncompressed</option>
+        <option value="webm-audio">WebM &mdash; audio, compressed</option>
+        <option value="webm-video">WebM &mdash; video with a waveform</option>
+      </select></label>
+    </div>
+    <div class="body">
+      <button id="convPick" class="ghost">Choose files</button>
+      <ul id="convList" style="list-style:none;padding:0;margin:14px 0 0;display:grid;gap:7px"></ul>
+      <p class="hint" style="margin-top:12px">Anything your browser can play can go in:
+        mp3, wav, ogg, m4a, flac, and the audio out of a video file.</p>
+    </div>
+    <div class="foot">
+      <button id="convGo" class="primary" disabled>Convert</button>
+      <span class="spring"></span>
+      <button id="convClose" class="ghost">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script id="reference-data" type="application/json">[{"label": "Grand Piano C4","kind": "note","arg": {"instrument": "Grand Piano","midi": 60,"seconds": 1.0},"n": 63945,"peak": 0.671777,"rms": 0.136428},{"label": "Electric Guitar E2","kind": "note","arg": {"instrument": "Electric Guitar","midi": 40,"seconds": 0.8},"n": 50714,"peak": 0.42,"rms": 0.120291},{"label": "Violin G4","kind": "note","arg": {"instrument": "Violin","midi": 67,"seconds": 0.9},"n": 48510,"peak": 0.256404,"rms": 0.124099},{"label": "Marimba C5","kind": "note","arg": {"instrument": "Marimba","midi": 72,"seconds": 0.6},"n": 52920,"peak": 0.576296,"rms": 0.117002},{"label": "Kick","kind": "drum","arg": {"name": "Kick"},"n": 22050,"peak": 0.9,"rms": 0.309098},{"label": "Snare","kind": "drum","arg": {"name": "Snare"},"n": 14553,"peak": 0.72,"rms": 0.067445},{"label": "Hat","kind": "drum","arg": {"name": "Hat"},"n": 3748,"peak": 0.34,"rms": 0.040885},{"label": "Triangle","kind": "drum","arg": {"name": "Triangle"},"n": 70560,"peak": 0.3,"rms": 0.046174},{"label": "Crash","kind": "drum","arg": {"name": "Crash"},"n": 97020,"peak": 0.42,"rms": 0.042063},{"label": "a 16 step beat","kind": "part","arg": {"pattern": {"kind": "drums","bpm": 120,"div": 4,"steps": 16,"name": "Beat","cells": [[0,0],[0,8],[1,4],[1,12],[3,0],[3,2],[3,4],[3,6],[3,8],[3,10],[3,12],[3,14]]}},"n": 141120,"peak": 0.99,"rms": 0.156338},{"label": "a do-re-mi run","kind": "part","arg": {"pattern": {"kind": "melody","instrument": "Grand Piano","bpm": 120,"div": 4,"steps": 16,"rows": 25,"root_midi": 48,"name": "Melody","cells": [[12,0],[14,2],[16,4],[17,6],[19,8],[21,10],[23,12],[24,14]]}},"n": 141120,"peak": 0.732106,"rms": 0.187638},{"label": "Bass Boost over that run","kind": "eq","arg": {"eq": {"enabled": true,"preset": "Bass Boost","bands": [7.5,7,5,2.5,0.5,0,0,0,0.5,1],"drive": 0.0,"output": -1.0,"export": true},"from": "a do-re-mi run"},"n": 282240,"peak": 0.864787,"rms": 0.242246}]</script>
+<script id="dsp-source" type="text/x-python">"""
+Music Studio - the sound engine, extracted for the browser.
+
+This is the part of music_studio.py that actually makes sound: the synthesis
+toolkit, all 63 instruments, the 18 piece drum kit and the equaliser. It is
+lifted verbatim so the web version sounds exactly like the desktop one.
+
+It imports numpy and nothing else - no tkinter, no pygame, no ffmpeg, no
+filesystem - so it runs unchanged inside Pyodide in a browser tab.
+"""
+
+import json
+import math
+import re
+
+import numpy as np
+
+
+SR = 44100                       # sample rate used everywhere internally
+
+
+MIN_PIECE = 0.02                 # shortest piece a split is allowed to leave
+
+
+APP_NAME = "Music Studio"
+
+
+PROJECT_EXT = ".mstudio"
+
+
+AUDIO_EXTS = (".wav", ".mp3", ".ogg", ".flac", ".aiff", ".aif", ".opus", ".m4a")
+
+
+BG      = "#15171c"
+
+
+PANEL   = "#1d2027"
+
+
+LANE_A  = "#191c22"
+
+
+LANE_B  = "#1e222a"
+
+
+GRID    = "#2a2f3a"
+
+
+GRID_HI = "#3a4152"
+
+
+FG      = "#e8eaed"
+
+
+FG_DIM  = "#878d9b"
+
+
+ACCENT  = "#4da3ff"
+
+
+PLAYHD  = "#ff5f6d"
+
+
+CLIP_COLORS = ["#3b6ea5", "#3f8f6f", "#8a5fa8", "#a8763f", "#a04a5e",
+               "#4a7fa0", "#6f8f3f", "#8f5f3f"]
+
+
+TRACK_H   = 78                   # pixel height of one track lane
+
+
+HEADER_W  = 176                  # pixel width of the track header column
+
+
+RULER_H   = 26
+
+
+EDGE_GRAB = 7                    # px from a clip edge that starts a trim
+
+
+def fmt_time(seconds):
+    seconds = max(0.0, float(seconds))
+    return f"{int(seconds // 60)}:{seconds % 60:05.2f}"
+
+
+def midi_to_freq(midi):
+    return 440.0 * (2.0 ** ((midi - 69) / 12.0))
+
+
+NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+
+
+def midi_name(midi):
+    return f"{NOTE_NAMES[midi % 12]}{midi // 12 - 1}"
+
+
+def _fast_len(n):
+    """The next length numpy transforms quickly (only factors of 2, 3 and 5).
+
+    An arbitrary length can have large prime factors, and numpy then falls
+    back to a much slower transform - the same trap that made the EQ crawl.
+    """
+    if n <= 16:
+        return 16
+    best = n
+    while True:
+        rest = best
+        for factor in (2, 3, 5):
+            while rest % factor == 0:
+                rest //= factor
+        if rest == 1:
+            return best
+        best += 1
+
+
+def _fft_filter(x, cutoff, mode="low", sr=SR):
+    """Cheap zero-phase 1-pole-ish filter done in the frequency domain."""
+    n = len(x)
+    if n < 16:
+        return x
+    padded = _fast_len(n)
+    spec = np.fft.rfft(x, padded)
+    freqs = np.fft.rfftfreq(padded, 1.0 / sr)
+    ratio = freqs / max(float(cutoff), 20.0)
+    if mode == "low":
+        gain = 1.0 / (1.0 + ratio ** 2)
+    else:
+        gain = ratio ** 2 / (1.0 + ratio ** 2)
+    return np.fft.irfft(spec * gain, padded)[:n].astype(np.float32)
+
+
+def _env(n, attack, decay, sustain, release, sr=SR):
+    """Classic ADSR shaped over exactly n samples."""
+    a, d, r = int(attack * sr), int(decay * sr), int(release * sr)
+    a, d, r = min(a, n), min(d, max(n - 1, 0)), min(r, max(n - 1, 0))
+    s = max(0, n - a - d - r)
+    chunks = []
+    if a:
+        chunks.append(np.linspace(0.0, 1.0, a, endpoint=False, dtype=np.float32))
+    if d:
+        chunks.append(np.linspace(1.0, sustain, d, endpoint=False, dtype=np.float32))
+    if s:
+        chunks.append(np.full(s, sustain, dtype=np.float32))
+    if r:
+        chunks.append(np.linspace(sustain, 0.0, r, dtype=np.float32))
+    env = np.concatenate(chunks) if chunks else np.zeros(n, dtype=np.float32)
+    if len(env) < n:
+        env = np.concatenate([env, np.zeros(n - len(env), dtype=np.float32)])
+    return env[:n]
+
+
+def _saw(phase):
+    return 2.0 * (phase - np.floor(phase + 0.5))
+
+
+def _square(phase):
+    return np.sign(np.sin(2.0 * np.pi * phase)).astype(np.float32)
+
+
+def _tri(phase):
+    return 2.0 * np.abs(2.0 * (phase - np.floor(phase + 0.5))) - 1.0
+
+
+def _phase(freq, n, sr=SR):
+    return np.arange(n, dtype=np.float32) * (freq / sr)
+
+
+def _t(n, sr=SR):
+    return np.arange(n, dtype=np.float32) / sr
+
+
+def _len(dur, tail, sr=SR):
+    return max(8, int((dur + tail) * sr))
+
+
+def _release(out, dur, rate, sr=SR):
+    """Damp whatever is left once the note is released."""
+    off = int(dur * sr)
+    if 0 <= off < len(out):
+        out[off:] *= np.exp(-np.arange(len(out) - off, dtype=np.float32) / sr * rate)
+    return out
+
+
+def _vib(t, rate, depth, onset=0.15):
+    return depth * np.clip((t - onset) * 3.0, 0.0, 1.0) * np.sin(2 * np.pi * rate * t)
+
+
+def _additive(freq, n, weights, decays, stretch=0.0, sr=SR):
+    """Sum of harmonics, each with its own level and decay rate.
+
+    `stretch` detunes upper partials the way a real string does.
+    """
+    t = _t(n, sr)
+    out = np.zeros(n, dtype=np.float32)
+    for index, (level, decay) in enumerate(zip(weights, decays), start=1):
+        partial = freq * index * (1.0 + stretch * index * index)
+        if partial > sr * 0.47 or level <= 0:
+            continue
+        out += level * np.sin(2 * np.pi * partial * t) * np.exp(-t * decay)
+    return out
+
+
+def _fm(freq, n, ratio, index, mod_decay, car_decay, sr=SR):
+    t = _t(n, sr)
+    mod = np.sin(2 * np.pi * freq * ratio * t) * np.exp(-t * mod_decay) * index
+    return (np.sin(2 * np.pi * freq * t + mod) * np.exp(-t * car_decay)).astype(np.float32)
+
+
+def _reed(freq, n, dur, odd=0.0, bright=1.0, noise=0.02, vib_rate=5.0,
+          vib_depth=0.004, attack=0.03, sr=SR):
+    """Sustained wind/reed tone: a rich waveform, breath noise, vibrato."""
+    t = _t(n, sr)
+    phase = np.cumsum(freq * (1.0 + _vib(t, vib_rate, vib_depth))) / sr
+    body = _saw(phase) * (1.0 - odd) + _square(phase) * odd
+    if noise > 0:
+        body = body + _coloured_noise(n, 11, freq * 2.0, "high", sr) * noise
+    body = _fft_filter(body, freq * (3.0 + 7.0 * bright) + 400.0, "low", sr)
+    env = _env(n, attack, 0.08, 0.85, 0.12, sr)
+    return _release((body * env).astype(np.float32), dur, 9.0, sr)
+
+
+def _bowed(freq, n, dur, bright=1.0, attack=0.08, vib_rate=5.5, sr=SR):
+    t = _t(n, sr)
+    phase = np.cumsum(freq * (1.0 + _vib(t, vib_rate, 0.006))) / sr
+    body = _saw(phase) + 0.3 * _saw(phase * 2.0)
+    body = _fft_filter(body, freq * (4.0 + 6.0 * bright) + 700.0, "low", sr)
+    body += _coloured_noise(n, 5, 2000, "high", sr) * 0.015          # bow hair
+    env = _env(n, attack, 0.12, 0.86, 0.18, sr)
+    return _release((body * env).astype(np.float32), dur, 7.0, sr)
+
+
+def _karplus(freq, dur, decay=1.6, colour=0.5, drive=0.0, tail=0.25, sr=SR):
+    """Plucked string, block-vectorised so it stays fast in pure numpy."""
+    n = _len(dur, tail, sr)
+    period = max(2, int(round(sr / max(freq, 20.0))))
+    excite = _noise(period, 17).astype(np.float32)
+    excite = _fft_filter(excite, freq * (3.0 + 10.0 * colour), "low", sr)
+    damping = float(np.clip(0.001 ** (1.0 / max(freq * decay, 1.0)), 0.80, 0.9999))
+    total = n + 2 * period
+    line = np.zeros(total, dtype=np.float32)
+    line[:period] = excite
+    start = period
+    while start < total:
+        stop = min(start + period, total)
+        previous = line[start - period:start]
+        shifted = np.empty_like(previous)
+        shifted[0] = line[start - period - 1] if start - period - 1 >= 0 else previous[0]
+        shifted[1:] = previous[:-1]
+        line[start:stop] = (damping * 0.5 * (previous + shifted))[:stop - start]
+        start = stop
+    out = line[:n]
+    if drive > 0:
+        out = np.tanh(out * (1.0 + drive * 12.0)) * 0.8
+    return _release(out.astype(np.float32), dur + tail * 0.6, 6.0, sr)
+
+
+def _organ(freq, n, dur, bars, click=0.0, sr=SR):
+    """Drawbar organ: fixed set of harmonics, no decay, tiny key click."""
+    t = _t(n, sr)
+    out = np.zeros(n, dtype=np.float32)
+    for multiple, level in bars:
+        partial = freq * multiple
+        if partial < sr * 0.47:
+            out += level * np.sin(2 * np.pi * partial * t)
+    env = _env(n, 0.012, 0.02, 0.98, 0.05, sr)
+    if click > 0:
+        out += _noise(n, 23) * np.exp(-t * 260.0) * click
+    return _release((out * env).astype(np.float32), dur, 25.0, sr)
+
+
+def _mallet(freq, n, partials, decay, strike=0.0, sr=SR):
+    t = _t(n, sr)
+    out = np.zeros(n, dtype=np.float32)
+    for ratio, level, rate in partials:
+        partial = freq * ratio
+        if partial < sr * 0.47:
+            out += level * np.sin(2 * np.pi * partial * t) * np.exp(-t * rate * decay)
+    if strike > 0:
+        out += _noise(n, 31) * np.exp(-t * 420.0) * strike
+    return out.astype(np.float32)
+
+
+def _choir(freq, n, dur, formants, sr=SR):
+    t = _t(n, sr)
+    phase = np.cumsum(freq * (1.0 + _vib(t, 5.0, 0.008))) / sr
+    source = _saw(phase)
+    padded = _fast_len(n)                      # same fast-length rule as the filters
+    freqs = np.fft.rfftfreq(padded, 1.0 / sr)
+    gain = np.zeros_like(freqs)
+    for centre, width, level in formants:      # gaussian formant bumps
+        gain += level * np.exp(-0.5 * ((freqs - centre) / max(width, 1.0)) ** 2)
+    out = np.fft.irfft(np.fft.rfft(source, padded) * gain, padded)[:n].astype(np.float32)
+    out += _coloured_noise(n, 13, 3000, "high", sr) * 0.02
+    env = _env(n, 0.12, 0.15, 0.88, 0.25, sr)
+    return _release((out * env).astype(np.float32), dur, 6.0, sr)
+
+
+def _grand_piano(freq, dur, sr=SR):
+    n = _len(dur, 0.45, sr)
+    out = _additive(freq, n,
+                    [1.0, 0.52, 0.32, 0.17, 0.10, 0.06, 0.035, 0.02],
+                    [2.0, 2.9, 3.8, 4.8, 6.0, 7.4, 9.0, 11.0], stretch=0.0002, sr=sr)
+    out *= 1.0 - np.exp(-_t(n, sr) * 500.0)
+    out += _noise(n, 3) * np.exp(-_t(n, sr) * 320.0) * 0.05        # hammer
+    return _release(out * 0.42, dur, 11.0, sr)
+
+
+def _upright_piano(freq, dur, sr=SR):
+    n = _len(dur, 0.35, sr)
+    out = _additive(freq, n, [1.0, 0.62, 0.42, 0.2, 0.14, 0.07],
+                    [2.6, 3.6, 4.6, 6.0, 7.5, 9.5], stretch=0.0005, sr=sr)
+    out = _fft_filter(out, 4200, "low", sr)
+    return _release(out * 0.44, dur, 12.0, sr)
+
+
+def _epiano(freq, dur, sr=SR):
+    n = _len(dur, 0.35, sr)
+    t = _t(n, sr)
+    mod = np.sin(2 * np.pi * freq * 2.0 * t) * np.exp(-t * 6.0) * 2.4
+    out = np.sin(2 * np.pi * freq * t + mod) * np.exp(-t * 2.6)
+    return _release(out.astype(np.float32) * 0.45, dur, 9.0, sr)
+
+
+def _harpsichord(freq, dur, sr=SR):
+    n = _len(dur, 0.25, sr)
+    out = _additive(freq, n, [1.0, 0.85, 0.6, 0.5, 0.35, 0.25, 0.18, 0.12],
+                    [4.0, 4.4, 5.0, 5.6, 6.4, 7.2, 8.4, 9.6], sr=sr)
+    out += _noise(n, 7) * np.exp(-_t(n, sr) * 700.0) * 0.1          # quill
+    return _release(out * 0.3, dur, 16.0, sr)
+
+
+def _clavinet(freq, dur, sr=SR):
+    n = _len(dur, 0.2, sr)
+    out = _karplus(freq, dur, decay=0.7, colour=0.9, drive=0.35, tail=0.2, sr=sr)[:n]
+    out = _fft_filter(out, freq * 8 + 1200, "low", sr)
+    return out * 0.55
+
+
+def _organ_jazz(freq, dur, sr=SR):
+    n = _len(dur, 0.12, sr)
+    return _organ(freq, n, dur, [(0.5, 0.35), (1, 1.0), (2, 0.6), (3, 0.25),
+                                 (4, 0.32), (6, 0.15), (8, 0.12)],
+                  click=0.08, sr=sr) * 0.26
+
+
+def _organ_church(freq, dur, sr=SR):
+    n = _len(dur, 0.5, sr)
+    out = _organ(freq, n, dur, [(0.5, 0.3), (1, 1.0), (2, 0.55), (3, 0.3),
+                                (4, 0.35), (5, 0.12), (6, 0.18), (8, 0.2)], sr=sr)
+    return _release(out * 0.22, dur, 3.0, sr)
+
+
+def _accordion(freq, dur, sr=SR):
+    n = _len(dur, 0.15, sr)
+    t = _t(n, sr)
+    out = np.zeros(n, dtype=np.float32)
+    for detune in (0.996, 1.0, 1.005):
+        out += _square(np.cumsum(freq * detune * (1 + _vib(t, 4.5, 0.003))) / sr)
+    out = _fft_filter(out / 3.0, freq * 6 + 900, "low", sr)
+    return _release((out * _env(n, 0.05, 0.06, 0.9, 0.1, sr)).astype(np.float32) * 0.3,
+                    dur, 14.0, sr)
+
+
+def _celesta(freq, dur, sr=SR):
+    n = _len(dur, 0.9, sr)
+    return _mallet(freq, n, [(1, 1.0, 2.2), (4.0, 0.28, 3.4), (10.4, 0.1, 5.0)],
+                   1.0, strike=0.03, sr=sr) * 0.4
+
+
+def _music_box(freq, dur, sr=SR):
+    n = _len(dur, 1.4, sr)
+    return _mallet(freq, n, [(1, 1.0, 1.6), (3.9, 0.35, 2.6), (9.2, 0.16, 3.6),
+                             (16.0, 0.06, 5.0)], 1.0, strike=0.04, sr=sr) * 0.36
+
+
+def _overdrive(x, gain, bias=0.07):
+    """Asymmetric soft clipping - the asymmetry is what adds the even
+    harmonics a valve amp is loved for."""
+    return (np.tanh(x * gain + bias) - np.tanh(bias)).astype(np.float32)
+
+
+def _cabinet(x, presence=1.0, low_cut=85.0, sr=SR):
+    """A 4x12 speaker cabinet.
+
+    This matters more than the distortion itself: a real cab throws away
+    everything above about 5 kHz, tightens the low end, dips the low mids and
+    lifts the presence range. Without it, overdrive is just fizz.
+    """
+    n = len(x)
+    if n < 32:
+        return x
+    padded = _fast_len(n)
+    spec = np.fft.rfft(x, padded)
+    freqs = np.fft.rfftfreq(padded, 1.0 / sr)
+    tight = (freqs / low_cut) ** 2 / (1.0 + (freqs / low_cut) ** 2)
+    rolloff = 1.0 / (1.0 + (freqs / 5200.0) ** 2) ** 2        # steep, like a speaker
+    presence_bump = 1.0 + presence * 0.9 * np.exp(
+        -0.5 * ((freqs - 2800.0) / 900.0) ** 2)
+    mid_dip = 1.0 - 0.35 * np.exp(-0.5 * ((freqs - 380.0) / 190.0) ** 2)
+    shaped = spec * tight * rolloff * presence_bump * mid_dip
+    return np.fft.irfft(shaped, padded)[:n].astype(np.float32)
+
+
+def _amped_guitar(freq, dur, drive, decay, colour, low_cut, presence,
+                  level, sr=SR):
+    """String -> pre-amp EQ -> overdrive -> cabinet, like a real rig."""
+    string = _karplus(freq, dur, decay=decay, colour=colour, tail=0.35, sr=sr)
+    tight = _fft_filter(string, low_cut, "high", sr)          # tighten first
+    mids = _fft_filter(tight, 900.0, "low", sr)               # push the mids
+    amp = _overdrive(tight + mids * 0.7, drive)
+    out = _cabinet(amp, presence=presence, low_cut=low_cut * 0.9, sr=sr)
+    peak = float(np.max(np.abs(out))) if out.size else 0.0
+    if peak > 0:
+        out = out * (level / peak)
+    return out.astype(np.float32)
+
+
+def _nylon_guitar(freq, dur, sr=SR):
+    return _karplus(freq, dur, decay=1.5, colour=0.35, sr=sr) * 0.55
+
+
+def _steel_guitar(freq, dur, sr=SR):
+    return _karplus(freq, dur, decay=2.2, colour=0.75, sr=sr) * 0.5
+
+
+def _clean_electric(freq, dur, sr=SR):
+    """The bell-like clean tone - chime, no amp grit."""
+    out = _karplus(freq, dur, decay=2.6, colour=0.6, drive=0.15, sr=sr)
+    return _fft_filter(out, freq * 7 + 1800, "low", sr) * 0.5
+
+
+def _electric_guitar(freq, dur, sr=SR):
+    """Crunch: a driven amp with the cab doing the work. Rock rhythm tone."""
+    return _amped_guitar(freq, dur, drive=7.5, decay=3.0, colour=0.72,
+                         low_cut=115.0, presence=1.0, level=0.42, sr=sr)
+
+
+def _distorted_guitar(freq, dur, sr=SR):
+    """High gain: more drive, tighter low end, more bite for leads and metal."""
+    return _amped_guitar(freq, dur, drive=26.0, decay=3.6, colour=0.6,
+                         low_cut=150.0, presence=1.35, level=0.40, sr=sr)
+
+
+def _bass_guitar(freq, dur, sr=SR):
+    out = _karplus(freq, dur, decay=1.8, colour=0.3, sr=sr)
+    out = _fft_filter(out, freq * 5 + 350, "low", sr)
+    return out * 0.6
+
+
+def _slap_bass(freq, dur, sr=SR):
+    n = _len(dur, 0.25, sr)
+    out = _karplus(freq, dur, decay=1.1, colour=0.85, drive=0.4, sr=sr)[:n]
+    out += _noise(n, 19) * np.exp(-_t(n, sr) * 180.0) * 0.12
+    return _fft_filter(out, freq * 9 + 900, "low", sr) * 0.5
+
+
+def _ukulele(freq, dur, sr=SR):
+    return _karplus(freq, dur, decay=0.9, colour=0.7, sr=sr) * 0.5
+
+
+def _banjo(freq, dur, sr=SR):
+    out = _karplus(freq, dur, decay=0.7, colour=0.95, drive=0.2, sr=sr)
+    return _fft_filter(out, 200, "high", sr) * 0.45
+
+
+def _harp(freq, dur, sr=SR):
+    return _karplus(freq, max(dur, 0.6), decay=3.0, colour=0.4, tail=0.6, sr=sr) * 0.5
+
+
+def _sitar(freq, dur, sr=SR):
+    n = _len(dur, 0.5, sr)
+    out = _karplus(freq, dur, decay=2.4, colour=0.85, drive=0.55, tail=0.5, sr=sr)[:n]
+    drone = (np.sin(2 * np.pi * freq * 0.5 * _t(n, sr)) * 0.12
+             * np.exp(-_t(n, sr) * 1.2))
+    return (out + drone).astype(np.float32) * 0.42
+
+
+def _koto(freq, dur, sr=SR):
+    return _karplus(freq, dur, decay=1.3, colour=0.5, sr=sr) * 0.5
+
+
+def _violin(freq, dur, sr=SR):
+    n = _len(dur, 0.2, sr)
+    return _bowed(freq, n, dur, bright=1.15, attack=0.06, vib_rate=6.0, sr=sr) * 0.3
+
+
+def _viola(freq, dur, sr=SR):
+    n = _len(dur, 0.22, sr)
+    return _bowed(freq, n, dur, bright=0.9, attack=0.07, vib_rate=5.5, sr=sr) * 0.3
+
+
+def _cello(freq, dur, sr=SR):
+    n = _len(dur, 0.25, sr)
+    return _bowed(freq, n, dur, bright=0.7, attack=0.09, vib_rate=5.0, sr=sr) * 0.33
+
+
+def _double_bass(freq, dur, sr=SR):
+    n = _len(dur, 0.3, sr)
+    out = _bowed(freq, n, dur, bright=0.45, attack=0.11, vib_rate=4.2, sr=sr)
+    return _fft_filter(out, freq * 5 + 220, "low", sr) * 0.38
+
+
+def _strings_ensemble(freq, dur, sr=SR):
+    n = _len(dur, 0.5, sr)
+    t = _t(n, sr)
+    body = np.zeros(n, dtype=np.float32)
+    for detune in (0.9955, 1.0, 1.0045):       # three players, one filter pass
+        phase = np.cumsum(freq * detune * (1.0 + _vib(t, 5.2, 0.006))) / sr
+        body += _saw(phase) + 0.25 * _saw(phase * 2.0)
+    body = _fft_filter(body / 3.0, freq * 9.0 + 700.0, "low", sr)
+    body += _coloured_noise(n, 5, 2000, "high", sr) * 0.015
+    out = body * _env(n, 0.18, 0.15, 0.86, 0.25, sr)
+    return _release(out.astype(np.float32) * 0.34, dur, 3.5, sr)
+
+
+def _pizzicato(freq, dur, sr=SR):
+    return _karplus(freq, min(dur, 0.35), decay=0.45, colour=0.55, tail=0.2, sr=sr) * 0.55
+
+
+def _brass(freq, dur, bright, attack, level, sr=SR):
+    n = _len(dur, 0.18, sr)
+    t = _t(n, sr)
+    phase = np.cumsum(freq * (1.0 + _vib(t, 5.2, 0.004))) / sr
+    body = _saw(phase)
+    swell = np.clip(t / max(attack, 0.01), 0.0, 1.0)          # brass "blat"
+    body = _fft_filter(body, freq * (2.0 + bright * 8.0) + 500.0, "low", sr)
+    body = body * (0.55 + 0.45 * swell)
+    body += _coloured_noise(n, 29, 3000, "high", sr) * 0.02
+    env = _env(n, attack, 0.1, 0.88, 0.12, sr)
+    return _release((body * env).astype(np.float32) * level, dur, 10.0, sr)
+
+
+def _trumpet(freq, dur, sr=SR):
+    return _brass(freq, dur, 1.25, 0.05, 0.3, sr)
+
+
+def _trombone(freq, dur, sr=SR):
+    return _brass(freq, dur, 0.85, 0.07, 0.33, sr)
+
+
+def _french_horn(freq, dur, sr=SR):
+    out = _brass(freq, dur, 0.6, 0.1, 0.32, sr)
+    return _fft_filter(out, freq * 6 + 900, "low", sr)
+
+
+def _tuba(freq, dur, sr=SR):
+    out = _brass(freq, dur, 0.4, 0.09, 0.38, sr)
+    return _fft_filter(out, freq * 4 + 300, "low", sr)
+
+
+def _brass_section(freq, dur, sr=SR):
+    n = _len(dur, 0.18, sr)
+    t = _t(n, sr)
+    body = np.zeros(n, dtype=np.float32)
+    for detune in (0.997, 1.0, 1.004):
+        body += _saw(np.cumsum(freq * detune * (1.0 + _vib(t, 5.2, 0.004))) / sr)
+    body = _fft_filter(body / 3.0, freq * 9.0 + 600.0, "low", sr)
+    swell = np.clip(t / 0.06, 0.0, 1.0)
+    body = body * (0.55 + 0.45 * swell)
+    body += _coloured_noise(n, 29, 3000, "high", sr) * 0.02
+    out = body * _env(n, 0.06, 0.1, 0.88, 0.12, sr)
+    return _release(out.astype(np.float32) * 0.3, dur, 10.0, sr)
+
+
+def _flute(freq, dur, sr=SR):
+    n = _len(dur, 0.15, sr)
+    t = _t(n, sr)
+    phase = np.cumsum(freq * (1.0 + _vib(t, 5.0, 0.005))) / sr
+    body = np.sin(2 * np.pi * phase) + 0.12 * np.sin(4 * np.pi * phase)
+    breath = _coloured_noise(n, 41, freq * 1.5, "high", sr) * 0.09
+    env = _env(n, 0.06, 0.08, 0.9, 0.12, sr)
+    return _release(((body + breath) * env).astype(np.float32) * 0.34, dur, 12.0, sr)
+
+
+def _piccolo(freq, dur, sr=SR):
+    out = _flute(freq, dur, sr)
+    return _fft_filter(out, 900, "high", sr) * 1.1
+
+
+def _recorder(freq, dur, sr=SR):
+    n = _len(dur, 0.12, sr)
+    t = _t(n, sr)
+    body = np.sin(2 * np.pi * freq * t) + 0.2 * np.sin(2 * np.pi * freq * 3 * t)
+    breath = _coloured_noise(n, 43, freq * 2, "high", sr) * 0.06
+    return _release(((body + breath) * _env(n, 0.03, 0.05, 0.92, 0.08, sr)
+                     ).astype(np.float32) * 0.32, dur, 14.0, sr)
+
+
+def _pan_flute(freq, dur, sr=SR):
+    n = _len(dur, 0.2, sr)
+    t = _t(n, sr)
+    body = np.sin(2 * np.pi * freq * (1 + _vib(t, 4.5, 0.006)) * t)
+    breath = _coloured_noise(n, 47, freq * 1.2, "high", sr) * 0.22
+    breath *= np.exp(-t * 9.0) + 0.25
+    return _release(((body + breath) * _env(n, 0.05, 0.1, 0.85, 0.14, sr)
+                     ).astype(np.float32) * 0.34, dur, 10.0, sr)
+
+
+def _clarinet(freq, dur, sr=SR):
+    n = _len(dur, 0.15, sr)
+    return _reed(freq, n, dur, odd=0.85, bright=0.6, noise=0.015,
+                 vib_rate=4.5, attack=0.04, sr=sr) * 0.3
+
+
+def _oboe(freq, dur, sr=SR):
+    n = _len(dur, 0.15, sr)
+    out = _reed(freq, n, dur, odd=0.2, bright=1.3, noise=0.02, attack=0.035, sr=sr)
+    return _fft_filter(out, 700, "high", sr) * 0.32 + out * 0.12
+
+
+def _bassoon(freq, dur, sr=SR):
+    n = _len(dur, 0.18, sr)
+    out = _reed(freq, n, dur, odd=0.35, bright=0.5, noise=0.02, attack=0.05, sr=sr)
+    return _fft_filter(out, freq * 5 + 400, "low", sr) * 0.36
+
+
+def _alto_sax(freq, dur, sr=SR):
+    n = _len(dur, 0.18, sr)
+    out = _reed(freq, n, dur, odd=0.45, bright=1.0, noise=0.035,
+                vib_rate=5.5, vib_depth=0.006, attack=0.04, sr=sr)
+    return out * 0.32
+
+
+def _tenor_sax(freq, dur, sr=SR):
+    n = _len(dur, 0.2, sr)
+    out = _reed(freq, n, dur, odd=0.5, bright=0.8, noise=0.04,
+                vib_rate=5.0, vib_depth=0.005, attack=0.045, sr=sr)
+    return _fft_filter(out, freq * 6 + 600, "low", sr) * 0.34
+
+
+def _harmonica(freq, dur, sr=SR):
+    n = _len(dur, 0.12, sr)
+    out = _reed(freq, n, dur, odd=0.7, bright=1.1, noise=0.05,
+                vib_rate=6.5, vib_depth=0.008, attack=0.02, sr=sr)
+    return out * 0.3
+
+
+def _bagpipe(freq, dur, sr=SR):
+    n = _len(dur, 0.1, sr)
+    out = _reed(freq, n, dur, odd=0.6, bright=1.2, noise=0.03, attack=0.02, sr=sr)
+    drone = np.sin(2 * np.pi * freq * 0.5 * _t(n, sr)) * 0.25
+    return ((out + drone) * 0.28).astype(np.float32)
+
+
+def _marimba(freq, dur, sr=SR):
+    n = _len(dur, 0.6, sr)
+    return _mallet(freq, n, [(1, 1.0, 3.2), (3.9, 0.25, 5.5), (9.2, 0.08, 8.0)],
+                   1.0, strike=0.05, sr=sr) * 0.45
+
+
+def _xylophone(freq, dur, sr=SR):
+    n = _len(dur, 0.4, sr)
+    return _mallet(freq, n, [(1, 1.0, 6.5), (3.0, 0.4, 8.5), (6.9, 0.15, 11.0)],
+                   1.0, strike=0.09, sr=sr) * 0.4
+
+
+def _vibraphone(freq, dur, sr=SR):
+    n = _len(dur, 1.6, sr)
+    t = _t(n, sr)
+    out = _mallet(freq, n, [(1, 1.0, 0.9), (4.0, 0.2, 1.8), (9.6, 0.07, 3.0)],
+                  1.0, strike=0.03, sr=sr)
+    return (out * (1.0 + 0.35 * np.sin(2 * np.pi * 5.5 * t))).astype(np.float32) * 0.4
+
+
+def _glockenspiel(freq, dur, sr=SR):
+    n = _len(dur, 1.2, sr)
+    return _mallet(freq, n, [(1, 1.0, 1.6), (5.4, 0.4, 2.6), (13.0, 0.16, 4.0)],
+                   1.0, strike=0.06, sr=sr) * 0.34
+
+
+def _tubular_bells(freq, dur, sr=SR):
+    n = _len(dur, 2.2, sr)
+    return _mallet(freq, n, [(1, 0.8, 0.7), (2.0, 1.0, 0.8), (3.0, 0.5, 1.0),
+                             (4.2, 0.35, 1.3), (5.4, 0.2, 1.7)],
+                   1.0, strike=0.05, sr=sr) * 0.34
+
+
+def _steel_drum(freq, dur, sr=SR):
+    n = _len(dur, 0.8, sr)
+    out = _fm(freq, n, 3.0, 2.2, 5.0, 2.4, sr)
+    out += _mallet(freq, n, [(1, 0.6, 2.0), (2.0, 0.3, 2.6)], 1.0, sr=sr)
+    return out.astype(np.float32) * 0.34
+
+
+def _kalimba(freq, dur, sr=SR):
+    n = _len(dur, 0.7, sr)
+    return _mallet(freq, n, [(1, 1.0, 2.6), (5.8, 0.18, 6.0)], 1.0,
+                   strike=0.05, sr=sr) * 0.42
+
+
+def _timpani(freq, dur, sr=SR):
+    n = _len(dur, 0.9, sr)
+    t = _t(n, sr)
+    sweep = freq * (1.0 + 0.25 * np.exp(-t * 26.0))
+    out = np.sin(2 * np.pi * np.cumsum(sweep) / sr) * np.exp(-t * 2.6)
+    out += _fft_filter(_noise(n, 53), 220, "low", sr) * np.exp(-t * 16.0) * 0.35
+    return out.astype(np.float32) * 0.5
+
+
+def _bell(freq, dur, sr=SR):
+    n = _len(dur, 0.9, sr)
+    t = _t(n, sr)
+    mod = np.sin(2 * np.pi * freq * 3.5 * t) * np.exp(-t * 3.0) * 3.0
+    return (np.sin(2 * np.pi * freq * t + mod) * np.exp(-t * 1.6)).astype(np.float32) * 0.36
+
+
+def _choir_aahs(freq, dur, sr=SR):
+    n = _len(dur, 0.45, sr)
+    return _choir(freq, n, dur, [(700, 200, 1.0), (1150, 250, 0.6),
+                                 (2600, 400, 0.25)], sr=sr) * 0.3
+
+
+def _voice_oohs(freq, dur, sr=SR):
+    n = _len(dur, 0.4, sr)
+    return _choir(freq, n, dur, [(380, 120, 1.0), (900, 200, 0.35),
+                                 (2400, 350, 0.1)], sr=sr) * 0.34
+
+
+def _whistle(freq, dur, sr=SR):
+    n = _len(dur, 0.12, sr)
+    t = _t(n, sr)
+    body = np.sin(2 * np.pi * freq * (1 + _vib(t, 5.5, 0.008)) * t)
+    body += _coloured_noise(n, 59, freq, "high", sr) * 0.03
+    return _release((body * _env(n, 0.06, 0.05, 0.95, 0.1, sr)).astype(np.float32) * 0.3,
+                    dur, 14.0, sr)
+
+
+def _theremin(freq, dur, sr=SR):
+    n = _len(dur, 0.25, sr)
+    t = _t(n, sr)
+    glide = freq * (1.0 - 0.06 * np.exp(-t * 12.0))
+    body = np.sin(2 * np.pi * np.cumsum(glide * (1 + _vib(t, 6.0, 0.012))) / sr)
+    return _release((body * _env(n, 0.1, 0.1, 0.92, 0.2, sr)).astype(np.float32) * 0.32,
+                    dur, 8.0, sr)
+
+
+def _lead(freq, dur, sr=SR):
+    n = _len(dur, 0.12, sr)
+    phase = _phase(freq, n, sr)
+    out = 0.6 * _saw(phase) + 0.4 * _saw(_phase(freq * 1.006, n, sr))
+    out = _fft_filter(out, freq * 6 + 900, "low", sr)
+    return (out * _env(n, 0.012, 0.09, 0.75, 0.1, sr)).astype(np.float32) * 0.32
+
+
+def _square_lead(freq, dur, sr=SR):
+    n = _len(dur, 0.1, sr)
+    out = _square(_phase(freq, n, sr)) * 0.6 + _square(_phase(freq * 1.004, n, sr)) * 0.4
+    out = _fft_filter(out, freq * 8 + 1200, "low", sr)
+    return (out * _env(n, 0.01, 0.06, 0.8, 0.08, sr)).astype(np.float32) * 0.3
+
+
+def _chiptune(freq, dur, sr=SR):
+    n = _len(dur, 0.05, sr)
+    phase = _phase(freq, n, sr) % 1.0
+    out = np.where(phase < 0.25, 1.0, -1.0).astype(np.float32)   # 25% pulse
+    return (out * _env(n, 0.002, 0.05, 0.7, 0.03, sr)) * 0.22
+
+
+def _bass_synth(freq, dur, sr=SR):
+    n = _len(dur, 0.1, sr)
+    phase = _phase(freq, n, sr)
+    out = 0.7 * _square(phase) + 0.5 * np.sin(2 * np.pi * phase)
+    out = _fft_filter(out, freq * 3.2 + 180, "low", sr)
+    return (out * _env(n, 0.008, 0.12, 0.8, 0.08, sr)).astype(np.float32) * 0.38
+
+
+def _pad(freq, dur, sr=SR):
+    n = _len(dur, 0.6, sr)
+    out = np.zeros(n, dtype=np.float32)
+    for detune in (0.994, 1.0, 1.007):
+        out += _saw(_phase(freq * detune, n, sr))
+    out += 0.5 * _saw(_phase(freq * 0.5, n, sr))
+    out = _fft_filter(out / 3.5, 1800, "low", sr)
+    return (out * _env(n, 0.28, 0.25, 0.72, 0.55, sr)).astype(np.float32) * 0.3
+
+
+def _warm_pad(freq, dur, sr=SR):
+    n = _len(dur, 0.9, sr)
+    t = _t(n, sr)
+    out = np.zeros(n, dtype=np.float32)
+    for detune in (0.991, 0.999, 1.006, 1.013):
+        out += _saw(_phase(freq * detune, n, sr))
+    out = _fft_filter(out / 4.0, 900 + 500 * np.sin(2 * np.pi * 0.15 * t).mean(), "low", sr)
+    return (out * _env(n, 0.5, 0.4, 0.75, 0.8, sr)).astype(np.float32) * 0.3
+
+
+def _pluck(freq, dur, sr=SR):
+    n = _len(dur, 0.25, sr)
+    out = _saw(_phase(freq, n, sr)) * np.exp(-_t(n, sr) * 7.0)
+    out = _fft_filter(out, freq * 5 + 700, "low", sr)
+    out *= 1.0 - np.exp(-_t(n, sr) * 900.0)
+    return out.astype(np.float32) * 0.4
+
+
+INSTRUMENT_GROUPS = [
+    ("Keys", ["Piano", "Upright Piano", "Electric Piano", "Harpsichord",
+              "Clavinet", "Jazz Organ", "Church Organ", "Accordion",
+              "Celesta", "Music Box"]),
+    ("Guitars & Bass", ["Nylon Guitar", "Steel Guitar", "Electric Guitar",
+                        "Distorted Guitar", "Clean Electric",
+                        "Bass Guitar", "Slap Bass",
+                        "Ukulele", "Banjo", "Harp", "Sitar", "Koto"]),
+    ("Strings", ["Violin", "Viola", "Cello", "Double Bass", "String Ensemble",
+                 "Pizzicato Strings"]),
+    ("Brass", ["Trumpet", "Trombone", "French Horn", "Tuba", "Brass Section"]),
+    ("Woodwinds", ["Flute", "Piccolo", "Recorder", "Pan Flute", "Clarinet",
+                   "Oboe", "Bassoon", "Alto Sax", "Tenor Sax", "Harmonica",
+                   "Bagpipe"]),
+    ("Tuned percussion", ["Marimba", "Xylophone", "Vibraphone", "Glockenspiel",
+                          "Tubular Bells", "Steel Drum", "Kalimba", "Timpani",
+                          "Bell"]),
+    ("Voice", ["Choir Aahs", "Voice Oohs", "Whistle", "Theremin"]),
+    ("Synth", ["Synth Lead", "Square Lead", "Chiptune", "Synth Bass", "Pad",
+               "Warm Pad", "Pluck"]),
+]
+
+
+INSTRUMENTS = {
+    # keys
+    "Piano": _grand_piano, "Upright Piano": _upright_piano,
+    "Electric Piano": _epiano, "Harpsichord": _harpsichord,
+    "Clavinet": _clavinet, "Jazz Organ": _organ_jazz,
+    "Church Organ": _organ_church, "Accordion": _accordion,
+    "Celesta": _celesta, "Music Box": _music_box,
+    # guitars & bass
+    "Nylon Guitar": _nylon_guitar, "Steel Guitar": _steel_guitar,
+    "Electric Guitar": _electric_guitar, "Distorted Guitar": _distorted_guitar,
+    "Clean Electric": _clean_electric,
+    "Bass Guitar": _bass_guitar, "Slap Bass": _slap_bass, "Ukulele": _ukulele,
+    "Banjo": _banjo, "Harp": _harp, "Sitar": _sitar, "Koto": _koto,
+    # strings
+    "Violin": _violin, "Viola": _viola, "Cello": _cello,
+    "Double Bass": _double_bass, "String Ensemble": _strings_ensemble,
+    "Pizzicato Strings": _pizzicato,
+    # brass
+    "Trumpet": _trumpet, "Trombone": _trombone, "French Horn": _french_horn,
+    "Tuba": _tuba, "Brass Section": _brass_section,
+    # woodwinds
+    "Flute": _flute, "Piccolo": _piccolo, "Recorder": _recorder,
+    "Pan Flute": _pan_flute, "Clarinet": _clarinet, "Oboe": _oboe,
+    "Bassoon": _bassoon, "Alto Sax": _alto_sax, "Tenor Sax": _tenor_sax,
+    "Harmonica": _harmonica, "Bagpipe": _bagpipe,
+    # tuned percussion
+    "Marimba": _marimba, "Xylophone": _xylophone, "Vibraphone": _vibraphone,
+    "Glockenspiel": _glockenspiel, "Tubular Bells": _tubular_bells,
+    "Steel Drum": _steel_drum, "Kalimba": _kalimba, "Timpani": _timpani,
+    "Bell": _bell,
+    # voice
+    "Choir Aahs": _choir_aahs, "Voice Oohs": _voice_oohs, "Whistle": _whistle,
+    "Theremin": _theremin,
+    # synth
+    "Synth Lead": _lead, "Square Lead": _square_lead, "Chiptune": _chiptune,
+    "Synth Bass": _bass_synth, "Pad": _pad, "Warm Pad": _warm_pad,
+    "Pluck": _pluck,
+}
+
+
+def instrument_family(name):
+    for family, members in INSTRUMENT_GROUPS:
+        if name in members:
+            return family
+    return INSTRUMENT_GROUPS[0][0]
+
+
+_noise_cache = {}
+
+
+def _noise(n, seed=0):
+    return np.random.default_rng(seed).standard_normal(n).astype(np.float32)
+
+
+def _coloured_noise(n, seed, cutoff, mode="high", sr=SR):
+    """Filtered noise, cached: layered voices share one FFT instead of one each."""
+    key = (n, seed, round(float(cutoff), 1), mode)
+    hit = _noise_cache.get(key)
+    if hit is None:
+        hit = _fft_filter(_noise(n, seed), cutoff, mode, sr)
+        if len(_noise_cache) > 64:
+            _noise_cache.clear()
+        _noise_cache[key] = hit
+    return hit
+
+
+def _band(x, low, high, sr=SR):
+    """Keep one band of a sound - roll off below `low` and above `high`."""
+    return _fft_filter(_fft_filter(x, low, "high", sr), high, "low", sr)
+
+
+def _peak(x, freq, q=6.0, lift=6.0, sr=SR):
+    """Ring one narrow frequency, the way a drum shell or a bell body does.
+
+    This is the difference between "some noise" and "a drum": a shell has a
+    pitch even when you can barely name it.
+    """
+    n = len(x)
+    if n < 16:
+        return x
+    padded = _fast_len(n)
+    spec = np.fft.rfft(x, padded)
+    freqs = np.fft.rfftfreq(padded, 1.0 / sr)
+    width = max(20.0, float(freq) / max(0.5, float(q)))
+    spec = spec * (1.0 + lift * np.exp(-0.5 * ((freqs - freq) / width) ** 2))
+    return np.fft.irfft(spec, padded)[:n].astype(np.float32)
+
+
+_METAL_RATIOS = (1.0, 1.342, 1.675, 1.987, 2.338, 2.845)
+
+
+def _metal(n, base, sr=SR):
+    """A ring of detuned square waves - what makes a cymbal metal."""
+    out = np.zeros(n, dtype=np.float32)
+    used = 0
+    for ratio in _METAL_RATIOS:
+        freq = base * ratio
+        if freq >= sr * 0.45:                 # never write a partial that aliases
+            continue
+        out += _square(_phase(freq, n, sr))
+        used += 1
+    return out / max(1, used)
+
+
+def _strike(n, seed, low, high, decay, sr=SR):
+    """The first few milliseconds: stick on skin, beater on metal."""
+    return (_band(_noise(n, seed), low, high, sr)
+            * np.exp(-_t(n, sr) * decay)).astype(np.float32)
+
+
+def _kick(sr=SR):
+    n = int(0.5 * sr)
+    t = _t(n, sr)
+    # two pitch stages - a fast punch on top of the body settling to its note
+    freq = 48.0 + 38.0 * np.exp(-t * 11.0) + 150.0 * np.exp(-t * 95.0)
+    body = np.sin(2 * np.pi * np.cumsum(freq) / sr) * np.exp(-t * 6.5)
+    click = _strike(n, 1, 1400, 6000, 420.0, sr) * 0.22
+    return np.tanh((body + click) * 1.25).astype(np.float32) * 0.85
+
+
+def _snare(sr=SR):
+    n = int(0.33 * sr)
+    t = _t(n, sr)
+    # the shell has two modes; the wires are a band, not a hiss
+    shell = (np.sin(2 * np.pi * 182 * t) * 0.6
+             + np.sin(2 * np.pi * 331 * t) * 0.4) * np.exp(-t * 24.0)
+    wires = _peak(_band(_noise(n, 2), 900, 9000, sr), 4200, 1.6, 2.2, sr)
+    wires *= np.exp(-t * 19.0)
+    crack = _strike(n, 11, 2500, 11000, 150.0, sr)
+    out = shell * 0.55 + wires * 0.5 + crack * 0.35
+    return out.astype(np.float32) * 0.62
+
+
+def _hat(sr=SR, open_hat=False):
+    n = int((0.45 if open_hat else 0.085) * sr)
+    t = _t(n, sr)
+    tone = _band(_metal(n, 317.0, sr), 6000, 13000, sr)
+    fizz = _band(_noise(n, 3), 6500, 14000, sr) * 0.3
+    env = np.exp(-t * (5.5 if open_hat else 55.0))
+    if not open_hat:
+        env = env * (1.0 - np.exp(-t * 2500.0))   # a closed hat has a hard edge
+    out = (tone + fizz) * env
+    return out.astype(np.float32) * (0.30 if open_hat else 0.34)
+
+
+def _clap(sr=SR):
+    n = int(0.34 * sr)
+    t = _t(n, sr)
+    out = np.zeros(n, dtype=np.float32)
+    for i, delay in enumerate((0.0, 0.009, 0.019, 0.030)):
+        d = int(delay * sr)
+        m = n - d
+        burst = _band(_noise(m, 4 + i), 900, 7500, sr)
+        out[d:] += burst * np.exp(-_t(m, sr) * 90.0) * (1.0 - 0.15 * i)
+    room = _band(_noise(n, 9), 700, 5000, sr) * np.exp(-t * 13.0) * 0.45
+    out = _peak(out + room, 1150, 1.2, 1.8, sr)          # hands make a cavity
+    return out.astype(np.float32) * 0.42
+
+
+def _tom(sr=SR):
+    n = int(0.45 * sr)
+    t = _t(n, sr)
+    freq = 105.0 + 75.0 * np.exp(-t * 22.0)
+    phase = np.cumsum(freq) / sr
+    skin = np.sin(2 * np.pi * phase) + np.sin(2 * np.pi * phase * 1.58) * 0.22
+    out = skin * np.exp(-t * 7.5)
+    out += _strike(n, 13, 400, 5000, 260.0, sr) * 0.3
+    return out.astype(np.float32) * 0.6
+
+
+def _rim(sr=SR):
+    n = int(0.11 * sr)
+    t = _t(n, sr)
+    out = np.sin(2 * np.pi * 1720 * t) * np.exp(-t * 130.0) * 0.5
+    out += np.sin(2 * np.pi * 420 * t) * np.exp(-t * 60.0) * 0.35
+    out += _strike(n, 61, 1500, 9000, 320.0, sr) * 0.5
+    return out.astype(np.float32) * 0.5
+
+
+def _ride(sr=SR):
+    n = int(1.8 * sr)
+    t = _t(n, sr)
+    wash = _band(_metal(n, 528.0, sr), 3000, 13000, sr) * np.exp(-t * 2.6)
+    ping = np.zeros(n, dtype=np.float32)
+    for ratio, amp, damp in ((1.0, 0.30, 4.0), (2.41, 0.16, 6.0),
+                             (3.79, 0.09, 8.5), (5.62, 0.05, 12.0)):
+        ping += np.sin(2 * np.pi * 610.0 * ratio * t) * np.exp(-t * damp) * amp
+    tick = _strike(n, 67, 2000, 12000, 220.0, sr) * 0.45
+    out = (wash * 1.5 + ping * 0.5 + tick * 0.6) * (1.0 - np.exp(-t * 900.0))
+    return out.astype(np.float32) * 0.34
+
+
+def _crash(sr=SR):
+    n = int(2.2 * sr)
+    t = _t(n, sr)
+    metal = _band(_metal(n, 392.0, sr), 2200, 12000, sr)
+    metal += _band(_metal(n, 611.0, sr), 3000, 13000, sr) * 0.7
+    wash = _band(_noise(n, 71), 2000, 13000, sr) * 0.8
+    bloom = 1.0 - np.exp(-t * 110.0)          # a real crash takes a moment to open
+    out = (metal * 0.45 + wash) * np.exp(-t * 1.9) * bloom
+    return out.astype(np.float32) * 0.36
+
+
+def _cowbell(sr=SR):
+    n = int(0.4 * sr)
+    t = _t(n, sr)
+    out = _square(_phase(540.0, n, sr)) * 0.5 + _square(_phase(800.0, n, sr)) * 0.5
+    out = _band(out, 450, 5000, sr)
+    out = _peak(out, 800.0, 2.0, 1.5, sr) * np.exp(-t * 11.0)
+    out += _strike(n, 17, 1500, 8000, 400.0, sr) * 0.25     # the stick on the lip
+    return out.astype(np.float32) * 0.36
+
+
+def _shaker(sr=SR):
+    n = int(0.16 * sr)
+    t = _t(n, sr)
+    beads = _peak(_band(_noise(n, 73), 4500, 9500, sr), 6400, 0.9, 2.6, sr)
+    # beads rush into the shell, then rattle out - not a plain decay
+    env = (1.0 - np.exp(-t * 320.0)) * np.exp(-t * 30.0)
+    return (beads * env).astype(np.float32) * 0.40
+
+
+def _tambourine(sr=SR):
+    n = int(0.5 * sr)
+    rng = np.random.default_rng(79)
+    out = np.zeros(n, dtype=np.float32)
+    for _ in range(14):                       # a ring of little jingles
+        freq = float(rng.uniform(5200.0, 11500.0))
+        if freq >= sr * 0.45:
+            continue
+        start = int(rng.uniform(0.0, 0.012) * sr)     # they never land as one
+        m = n - start
+        tt = _t(m, sr)
+        out[start:] += (np.sin(2 * np.pi * freq * tt)
+                        * np.exp(-tt * rng.uniform(12.0, 26.0))
+                        * 0.09).astype(np.float32)
+    out += _strike(n, 131, 700, 4000, 120.0, sr) * 0.25    # the head being hit
+    return out.astype(np.float32) * 0.40
+
+
+def _conga(sr=SR):
+    n = int(0.4 * sr)
+    t = _t(n, sr)
+    freq = 232.0 * (1.0 + 0.28 * np.exp(-t * 45.0))
+    phase = np.cumsum(freq) / sr
+    out = np.sin(2 * np.pi * phase) * np.exp(-t * 8.0)
+    out += np.sin(2 * np.pi * phase * 2.7) * np.exp(-t * 26.0) * 0.18
+    out += _strike(n, 83, 800, 7000, 200.0, sr) * 0.3
+    return _peak(out, 380.0, 1.5, 1.0, sr).astype(np.float32) * 0.55
+
+
+def _bongo(sr=SR):
+    n = int(0.26 * sr)
+    t = _t(n, sr)
+    freq = 415.0 * (1.0 + 0.24 * np.exp(-t * 60.0))
+    phase = np.cumsum(freq) / sr
+    out = np.sin(2 * np.pi * phase) * np.exp(-t * 13.0)
+    out += np.sin(2 * np.pi * phase * 2.9) * np.exp(-t * 34.0) * 0.16
+    out += _strike(n, 89, 1200, 9000, 300.0, sr) * 0.32
+    return _peak(out, 660.0, 1.8, 0.9, sr).astype(np.float32) * 0.5
+
+
+def _woodblock(sr=SR):
+    n = int(0.14 * sr)
+    t = _t(n, sr)
+    out = np.sin(2 * np.pi * 1250 * t) * np.exp(-t * 40.0)
+    out += np.sin(2 * np.pi * 2130 * t) * np.exp(-t * 62.0) * 0.35
+    out += np.sin(2 * np.pi * 3480 * t) * np.exp(-t * 95.0) * 0.12
+    out += _strike(n, 97, 1800, 8000, 450.0, sr) * 0.28     # dry knock, no hiss
+    return _band(out, 500, 9000, sr).astype(np.float32) * 0.45
+
+
+def _triangle(sr=SR):
+    """A struck steel bar, and no longer an ice pick.
+
+    The old one stacked four equally loud sine partials, and the top two sat
+    above 18 kHz - past what 44.1 kHz can hold, so they folded back down as a
+    whistle that never decayed with the rest. That fold-back is the part that
+    hurt. This keeps the bright ring but drops any partial near Nyquist, lets
+    the high partials die faster and quieter than the low ones the way a real
+    bar's do, and rolls the very top off.
+    """
+    n = int(1.6 * sr)
+    t = _t(n, sr)
+    out = np.zeros(n, dtype=np.float32)
+    base = 2050.0
+    for ratio, amp in ((1.0, 0.34), (2.14, 0.20), (3.31, 0.13),
+                       (4.27, 0.08), (5.83, 0.05), (7.16, 0.03)):
+        freq = base * ratio
+        if freq >= sr * 0.42:
+            continue
+        out += np.sin(2 * np.pi * freq * t) * np.exp(-t * (1.8 + ratio * 0.9)) * amp
+    out += _strike(n, 107, 3000, 9000, 260.0, sr) * 0.18    # the tap itself
+    out *= 1.0 - np.exp(-t * 900.0)
+    out = _fft_filter(out, 9000, "low", sr)                 # take the ice pick off
+    return out.astype(np.float32) * 0.26
+
+
+def _kick_808(sr=SR):
+    n = int(1.1 * sr)
+    t = _t(n, sr)
+    freq = 38.0 + 62.0 * np.exp(-t * 22.0)
+    out = np.sin(2 * np.pi * np.cumsum(freq) / sr) * np.exp(-t * 3.0)
+    out += _strike(n, 101, 1000, 5000, 500.0, sr) * 0.18
+    return np.tanh(out * 1.5).astype(np.float32) * 0.85
+
+
+def _snap(sr=SR):
+    n = int(0.2 * sr)
+    t = _t(n, sr)
+    out = _band(_noise(n, 103), 1400, 9000, sr) * np.exp(-t * 46.0)
+    out = _peak(out, 2300.0, 1.3, 2.0, sr)        # the pocket the fingers make
+    out += _strike(n, 109, 3000, 12000, 320.0, sr) * 0.4
+    return out.astype(np.float32) * 0.5
+
+
+DRUM_ORDER = ["Kick", "Snare", "Clap", "Hat", "Open Hat", "Tom",
+              "Rim", "Ride", "Crash", "Cowbell", "Shaker", "Tambourine",
+              "Conga", "Bongo", "Woodblock", "Triangle", "808 Kick", "Snap"]
+
+
+_DRUM_CACHE = {}
+
+
+_DRUM_LEVEL = {"Kick": 0.90, "808 Kick": 0.90, "Snare": 0.72, "Clap": 0.58,
+               "Hat": 0.34, "Open Hat": 0.32, "Tom": 0.70, "Rim": 0.44,
+               "Ride": 0.30, "Crash": 0.42, "Cowbell": 0.46, "Shaker": 0.28,
+               "Tambourine": 0.36, "Conga": 0.66, "Bongo": 0.60,
+               "Woodblock": 0.46, "Triangle": 0.30, "Snap": 0.48}
+
+
+def drum_sample(name):
+    """One drum hit, rendered once and kept, at its balanced level in the kit."""
+    if name not in _DRUM_CACHE:
+        makers = {"Kick": _kick, "Snare": _snare, "Clap": _clap,
+                  "Hat": lambda: _hat(open_hat=False),
+                  "Open Hat": lambda: _hat(open_hat=True), "Tom": _tom,
+                  "Rim": _rim, "Ride": _ride, "Crash": _crash,
+                  "Cowbell": _cowbell, "Shaker": _shaker,
+                  "Tambourine": _tambourine, "Conga": _conga, "Bongo": _bongo,
+                  "Woodblock": _woodblock, "Triangle": _triangle,
+                  "808 Kick": _kick_808, "Snap": _snap}
+        sample = makers[name]()
+        peak = float(np.max(np.abs(sample))) if sample.size else 0.0
+        target = _DRUM_LEVEL.get(name, 0.5)
+        if peak > 1e-6:
+            sample = (sample * (min(target, 0.95) / peak)).astype(np.float32)
+        _DRUM_CACHE[name] = sample
+    return _DRUM_CACHE[name]
+
+
+_note_cache = {}
+
+
+def _cached_note(name, voice, midi, length):
+    """Synthesise a note once per (instrument, pitch, length).
+
+    Patterns repeat the same notes constantly and some instruments cost a
+    few milliseconds each; without this a 48 note string part took 320 ms.
+    The cached arrays are only ever read from, never written into.
+    """
+    key = (name, midi, round(float(length), 4))
+    note = _note_cache.get(key)
+    if note is None:
+        note = voice(midi_to_freq(midi), length)
+        _note_cache[key] = note
+        # a grid filled edge to edge makes 25 very long notes; cap the cache
+        # by memory as well as by count so it cannot run away
+        held = sum(a.nbytes for a in _note_cache.values())
+        while _note_cache and (len(_note_cache) > 400 or held > 64_000_000):
+            oldest = next(iter(_note_cache))
+            held -= _note_cache[oldest].nbytes
+            _note_cache.pop(oldest)
+        _note_cache[key] = note
+    return note
+
+
+def render_pattern(pattern):
+    """Turn a piano-roll / drum pattern dict into a mono float32 array."""
+    bpm = float(pattern.get("bpm", 110))
+    div = int(pattern.get("div", 4))               # steps per beat
+    steps = int(pattern.get("steps", 32))
+    cells = {tuple(c) for c in pattern.get("cells", [])}
+    step_dur = 60.0 / bpm / div
+    tail = int(1.2 * SR)
+    total = int(steps * step_dur * SR) + tail
+    out = np.zeros(total, dtype=np.float32)
+
+    if pattern.get("kind") == "drums":
+        for row, step in sorted(cells):
+            if row >= len(DRUM_ORDER):
+                continue
+            sample = drum_sample(DRUM_ORDER[row])
+            at = int(step * step_dur * SR)
+            end = min(total, at + len(sample))
+            out[at:end] += sample[:end - at]
+    else:
+        name = pattern.get("instrument", "Piano")
+        voice = INSTRUMENTS.get(name, _grand_piano)
+        root = int(pattern.get("root_midi", 48))
+        rows = int(pattern.get("rows", 25))
+        # merge horizontally adjacent cells in the same row into single notes
+        by_row = {}
+        for row, step in cells:
+            by_row.setdefault(row, []).append(step)
+        for row, row_steps in by_row.items():
+            row_steps.sort()
+            run_start = prev = row_steps[0]
+            for step in row_steps[1:] + [None]:
+                if step == prev + 1:
+                    prev = step
+                    continue
+                length = (prev - run_start + 1) * step_dur
+                midi = root + (rows - 1 - row)        # top row = highest pitch
+                note = _cached_note(name, voice, midi, length)
+                at = int(run_start * step_dur * SR)
+                end = min(total, at + len(note))
+                if end > at:
+                    out[at:end] += note[:end - at]
+                if step is None:
+                    break
+                run_start = prev = step
+    peak = float(np.max(np.abs(out))) if out.size else 0.0
+    if peak > 0.99:
+        out *= 0.99 / peak
+    return out
+
+
+EQ_BANDS = [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
+
+
+EQ_RANGE = 12.0                      # slider limit in dB
+
+
+EQ_PRESETS = {
+    "Flat": {
+        "bands": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], "drive": 0.0, "output": 0.0,
+        "note": "No change at all - the reference."},
+    "Bass Boost": {
+        "bands": [7.5, 7, 5, 2.5, 0.5, 0, 0, 0, 0.5, 1], "drive": 0.0, "output": -1.0,
+        "note": "Lifts everything under 250 Hz. Weight without mudding the vocals."},
+    "Treble Boost": {
+        "bands": [0, 0, 0, 0, 0, 1, 2.5, 4.5, 6, 7], "drive": 0.0, "output": -1.0,
+        "note": "Air and detail up top. Good for dull recordings."},
+    "Headphones": {
+        "bands": [4, 3, 1.5, 0, -1, -1.5, 0, 1.5, 3, 4], "drive": 0.0, "output": -0.5,
+        "note": "Gentle smile curve - the classic headphone listening tilt."},
+    "Laptop Speakers": {
+        "bands": [-8, -6, -2, 2.5, 3, 2, 3, 3.5, 1.5, 0], "drive": 0.0, "output": 0.0,
+        "note": "Drops the bass a laptop cannot make anyway and pushes the "
+                "midrange so it still reads."},
+    "Portable Speaker": {
+        "bands": [-9, -4, 2.5, 3, 1, 0, 2, 3.5, 2, -1], "drive": 0.0, "output": 0.0,
+        "note": "Trims wasted sub, adds body around 150 Hz and presence up top."},
+    "Home Stereo": {
+        "bands": [3, 2.5, 1, 0, -1, -1, 0, 1.5, 2.5, 3], "drive": 0.0, "output": -0.5,
+        "note": "Wide, relaxed hi-fi curve for a room with real speakers."},
+    "Car": {
+        "bands": [6, 5, 2, -1, -2.5, -1, 1.5, 3.5, 4, 3, ], "drive": 0.0, "output": -1.0,
+        "note": "Bass and top lifted to punch through road noise, mids pulled back."},
+    "Deep Fried": {
+        "bands": [12, 11, 6, -7, -9, -4, 7, 11, 12, 12], "drive": 0.85, "output": 6.0,
+        "note": "Ruined on purpose: scooped mids, maxed ends and heavy "
+                "saturation. Loud, crunchy, deliberately awful."},
+    "Custom": {
+        "bands": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], "drive": 0.0, "output": 0.0,
+        "note": "Your own settings - moving any slider lands you here."},
+}
+
+
+EQ_ORDER = ["Flat", "Bass Boost", "Treble Boost", "Headphones", "Laptop Speakers",
+            "Portable Speaker", "Home Stereo", "Car", "Deep Fried", "Custom"]
+
+
+def default_eq():
+    return {"enabled": False, "preset": "Flat", "bands": [0.0] * len(EQ_BANDS),
+            "drive": 0.0, "output": 0.0, "export": True}
+
+
+def eq_from_preset(name):
+    preset = EQ_PRESETS.get(name, EQ_PRESETS["Flat"])
+    return {"enabled": True, "preset": name, "bands": list(preset["bands"]),
+            "drive": float(preset.get("drive", 0.0)),
+            "output": float(preset.get("output", 0.0)), "export": True}
+
+
+def eq_is_flat(eq):
+    return (not eq
+            or all(abs(g) < 0.01 for g in eq.get("bands", []))
+            and abs(eq.get("drive", 0.0)) < 1e-3
+            and abs(eq.get("output", 0.0)) < 0.01)
+
+
+def eq_gain_db(freqs, bands):
+    """dB gain for each frequency, interpolated across the band centres."""
+    centres = np.log10(np.array(EQ_BANDS, dtype=np.float64))
+    safe = np.maximum(np.asarray(freqs, dtype=np.float64), 1.0)
+    return np.interp(np.log10(safe), centres, np.asarray(bands, dtype=np.float64))
+
+
+AUTO_AUDITION = [True]          # "play the scale when I pick an instrument"
+
+
+EQ_TAPS = 4096                  # linear-phase filter length (~0.7 dB worst case)
+
+
+EQ_BLOCK = 16384                # overlap-add FFT size
+
+
+_eq_kernels = {}
+
+
+def eq_kernel(bands):
+    """Linear-phase FIR for a set of band gains, built once and cached.
+
+    Filtering a whole song with a single FFT is a trap: the mix length is
+    an arbitrary number, and numpy falls back to a very slow transform when
+    it has large prime factors (13 seconds for a 3 minute song). A short
+    kernel applied by overlap-add is bounded, cache friendly and ~50x faster.
+    """
+    key = tuple(round(float(gain), 3) for gain in bands)
+    cached = _eq_kernels.get(key)
+    if cached is not None:
+        return cached
+    freqs = np.fft.rfftfreq(EQ_TAPS, 1.0 / SR)
+    magnitude = 10.0 ** (eq_gain_db(freqs, bands) / 20.0)
+    impulse = np.fft.irfft(magnitude, EQ_TAPS)
+    impulse = np.roll(impulse, EQ_TAPS // 2) * np.hanning(EQ_TAPS)
+    kernel = impulse.astype(np.float32)
+    if len(_eq_kernels) > 32:
+        _eq_kernels.clear()
+    _eq_kernels[key] = kernel
+    return kernel
+
+
+def _overlap_add(signal, kernel, block=EQ_BLOCK):
+    """Convolve an (n, channels) signal with a kernel, block by block."""
+    taps = len(kernel)
+    step = block - taps + 1
+    spectrum = np.fft.rfft(kernel, block)[:, None]
+    length, channels = signal.shape
+    out = np.zeros((length + taps, channels), dtype=np.float32)
+    for start in range(0, length, step):
+        piece = signal[start:start + step]
+        chunk = np.fft.irfft(np.fft.rfft(piece, block, axis=0) * spectrum,
+                             block, axis=0)
+        stop = min(start + block, out.shape[0])
+        out[start:stop] += chunk[:stop - start].astype(np.float32)
+    delay = taps // 2                       # linear phase: constant delay
+    return out[delay:delay + length]
+
+
+def apply_eq(stereo, eq):
+    """Run the master EQ over a (n, 2) float32 mix. Returns a new array."""
+    if eq_is_flat(eq) or not eq.get("enabled", False) or stereo.shape[0] < 32:
+        return stereo
+    if any(abs(gain) > 0.01 for gain in eq["bands"]):
+        out = _overlap_add(np.ascontiguousarray(stereo, dtype=np.float32),
+                           eq_kernel(eq["bands"]))
+    else:
+        out = stereo.astype(np.float32, copy=True)
+    drive = float(eq.get("drive", 0.0))
+    if drive > 1e-3:                       # saturation: the "deep fried" part
+        amount = 1.0 + drive * 14.0
+        out = (np.tanh(out * amount) / np.tanh(amount)).astype(np.float32)
+    trim = float(eq.get("output", 0.0))
+    if abs(trim) > 0.01:
+        out = out * (10.0 ** (trim / 20.0))
+    # no hard clip here: the limiter in Project.finish() brings the level back,
+    # so a big boost stays clean instead of distorting on the way through
+    return out.astype(np.float32)
+
+
+# ==========================================================================
+#  the bridge to JavaScript
+# ==========================================================================
+#  Pyodide can hand a numpy array straight to JS as a typed array, so these
+#  return raw float32 and the page wraps them in a Web Audio buffer. Nothing
+#  here touches the DOM; it is all called from a worker thread.
+
+def instrument_catalogue():
+    """Every playable voice, grouped the way the picker shows them."""
+    groups = {}
+    for name in INSTRUMENTS:
+        groups.setdefault(instrument_family(name), []).append(name)
+    return json.dumps({"families": groups, "drums": DRUM_ORDER,
+                       "eq_presets": EQ_ORDER, "eq_bands": EQ_BANDS,
+                       "sr": SR})
+
+
+def render_part(spec):
+    """One pattern (notes or drums) -> mono float32."""
+    return render_pattern(json.loads(spec) if isinstance(spec, str) else spec)
+
+
+def render_one_note(instrument, midi, seconds):
+    """A single note, for the preview you hear when picking an instrument."""
+    voice = INSTRUMENTS.get(instrument, _grand_piano)
+    return np.ascontiguousarray(voice(midi_to_freq(int(midi)), float(seconds)),
+                                dtype=np.float32)
+
+
+def render_one_drum(name):
+    return np.ascontiguousarray(drum_sample(name), dtype=np.float32)
+
+
+def _as_floats(x):
+    """Accept a numpy array, a memoryview, or a JS Float32Array from the page."""
+    if hasattr(x, "to_py"):          # a JsProxy handed over by Pyodide
+        x = x.to_py()
+    return np.asarray(x, dtype=np.float32)
+
+
+def equalise(left, right, eq_json):
+    """Run the finished stereo mix through the graphic EQ and the limiter.
+
+    apply_eq deliberately does not clip - on the desktop the limiter lives in
+    Project.finish(), so it has to be applied here too or a boosted preset
+    would distort in the browser where it stays clean in the app.
+    """
+    eq = json.loads(eq_json) if isinstance(eq_json, str) else eq_json
+    stereo = np.stack([_as_floats(left), _as_floats(right)], axis=1)
+    out = apply_eq(stereo, eq)
+    peak = float(np.max(np.abs(out))) if out.size else 0.0
+    if peak > 1.0:
+        out = out * (0.995 / peak)
+    return np.ascontiguousarray(out, dtype=np.float32)
+
+
+def preset_bands(name):
+    return json.dumps(eq_from_preset(name))
+</script>
+<script id="worker-source" type="text/js-worker">/* ------------------------------------------------------------------ *
+ *  The sound engine, off the main thread.
+ *
+ *  Pyodide is a ~12 MB download and numpy maths can take a second on a
+ *  busy pattern. Both of those would freeze the page if they happened
+ *  on the UI thread, so everything Python lives in here and the page
+ *  talks to it by message. The page stays clickable the whole time.
+ * ------------------------------------------------------------------ */
+
+const VERSION = "314.0.7";
+// Where to find the Python runtime. A copy shipped next to this page is
+// tried first: it works offline, it cannot break when a CDN changes, and
+// some hosts refuse outside downloads altogether. The public mirrors are
+// the fallback for a page published on its own.
+let HOMES = [
+  `https://cdn.jsdelivr.net/pyodide/v${VERSION}/full/`,
+  `https://cdn.jsdelivr.net/npm/pyodide@${VERSION}/`,
+];
+
+let py = null, dsp = null;
+
+/**
+ * Some hosts only serve a fixed set of file extensions, and .zip and .whl -
+ * which is what Python's standard library and the numpy package are - are
+ * not among them. When the runtime is the copy shipped next to the page,
+ * those two are published with a .wasm suffix and the requests for them are
+ * pointed at the renamed files here. Requests to a public mirror are left
+ * exactly as they are.
+ */
+function rewriteLocalArchives(home) {
+  const real = self.fetch.bind(self);
+  self.fetch = (input, init) => {
+    const url = typeof input === "string" ? input
+              : (input && input.url) ? input.url : String(input);
+    if (url.startsWith(home) && /\.(zip|whl)(\?|$)/.test(url)) {
+      return real(url.replace(/\.(zip|whl)(\?|$)/, ".$1.wasm$2"), init);
+    }
+    return real(input, init);
+  };
+}
+
+const say = (msg, transfer) => self.postMessage(msg, transfer || []);
+const tell = (stage, pct) => say({ type: "progress", stage, pct });
+
+/** Copy a numpy float32 array out of wasm memory into a normal JS array. */
+function takeFloats(proxy) {
+  const view = proxy.getBuffer("f32");
+  try {
+    return view.data.slice();          // slice() copies; the view is borrowed
+  } finally {
+    view.release();
+    proxy.destroy();
+  }
+}
+
+/**
+ * Get numpy in, whichever way works.
+ *
+ * loadPackage normally finds it next to the runtime, but some hosts only
+ * serve the npm mirror, which carries the lock file without the wheels.
+ * In that case read the lock file from a home that does have them and ask
+ * for the wheel by its full address.
+ */
+async function ensureNumpy() {
+  try {
+    await py.loadPackage("numpy");
+    return;
+  } catch (first) {
+    for (const home of HOMES) {
+      try {
+        const lock = await (await fetch(home + "pyodide-lock.json")).json();
+        const file = lock.packages.numpy.file_name;
+        await py.loadPackage(new URL(file, home).href);
+        return;
+      } catch (err) { /* try the next one */ }
+    }
+    throw first;
+  }
+}
+
+
+async function boot(source, localHome) {
+  if (localHome) {
+    HOMES = [localHome, ...HOMES];
+    rewriteLocalArchives(localHome);
+  }
+  let lastError = null;
+  for (const indexURL of HOMES) {
+    try {
+      tell("Downloading Python", 5);
+      const { loadPyodide } = await import(indexURL + "pyodide.mjs");
+      py = await loadPyodide({
+        indexURL,
+        stdout: () => {},
+        stderr: (t) => console.warn("[py]", t),
+      });
+      tell("Loading numpy", 55);
+      await ensureNumpy();
+      lastError = null;
+      break;
+    } catch (err) {
+      lastError = err;
+      py = null;
+    }
+  }
+  if (!py) throw lastError || new Error("could not start Python");
+
+  tell("Starting the studio", 88);
+  py.FS.writeFile("studio_dsp.py", source, { encoding: "utf8" });
+  dsp = py.pyimport("studio_dsp");
+
+  // Warm the caches the first play would otherwise pay for.
+  dsp.render_one_note("Grand Piano", 60, 0.25).destroy();
+  tell("Ready", 100);
+  say({ type: "ready", catalogue: JSON.parse(dsp.instrument_catalogue()) });
+}
+
+// Jobs that hand back audio, and jobs that hand back a line of text.
+const AUDIO_JOBS = {
+  part: (m) => takeFloats(dsp.render_part(JSON.stringify(m.pattern))),
+  note: (m) => takeFloats(dsp.render_one_note(m.instrument, m.midi, m.seconds)),
+  drum: (m) => takeFloats(dsp.render_one_drum(m.name)),
+  eq:   (m) => takeFloats(dsp.equalise(m.left, m.right, JSON.stringify(m.eq))),
+};
+const TEXT_JOBS = {
+  preset: (m) => dsp.preset_bands(m.name),
+};
+
+self.onmessage = async (event) => {
+  const msg = event.data;
+  if (msg.type === "boot") {
+    try {
+      await boot(msg.source, msg.home);
+    } catch (err) {
+      say({ type: "failed", message: String(err && err.message || err) });
+    }
+    return;
+  }
+  const audioJob = AUDIO_JOBS[msg.type];
+  const textJob = TEXT_JOBS[msg.type];
+  if (!audioJob && !textJob) return;
+  if (!dsp) {
+    say({ type: "error", id: msg.id, message: "the sound engine is still loading" });
+    return;
+  }
+  try {
+    const started = performance.now();
+    if (textJob) {
+      say({ type: "result", id: msg.id, data: textJob(msg),
+            ms: performance.now() - started });
+    } else {
+      const data = audioJob(msg);
+      say({ type: "result", id: msg.id, data, ms: performance.now() - started },
+           [data.buffer]);
+    }
+  } catch (err) {
+    say({ type: "error", id: msg.id, message: String(err && err.message || err) });
+  }
+};
+</script>
+<script>/* =====================================================================
+ *  Music Studio - browser edition
+ *
+ *  The sound is made by the same Python that the desktop app uses, over
+ *  in a worker. Everything here is the part you touch: the timeline, the
+ *  pattern editor, mixing the tracks together and pushing the result at
+ *  the speakers. None of it waits for Python except actually making noise.
+ * ===================================================================== */
+"use strict";
+
+const SR = 44100;
+const CLIP_COLORS = ["#3b6ea5", "#3f8f6f", "#8a5fa8", "#a8763f", "#a04a5e", "#3f7f8f"];
+const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const ROLL_ROWS = 25;                       // two octaves plus the top C
+const $ = (id) => document.getElementById(id);
+
+/* ---------------------------------------------------------------- state */
+let nextId = 1;
+const app = {
+  bpm: 110,
+  tracks: [],
+  sel: null,
+  playhead: 0,
+  cur: 0,
+  zoom: 96,                                 // pixels per second
+  eq: { enabled: false, bands: new Array(10).fill(0), drive: 0, output: 0, preset: "Flat" },
+  undo: [], redo: [],
+  catalogue: null,
+  dirty: true,
+};
+
+const newTrack = (name) => ({ name, volume: 0.85, pan: 0, mute: false, solo: false, clips: [] });
+
+function makeClip(name, buf, start, source, color) {
+  return {
+    id: nextId++, name, buf, start, source: source || { type: "none" },
+    inOff: 0, outOff: buf.length, gain: 1, muted: false,
+    color: color === undefined ? 0 : color,
+  };
+}
+const clipLen = (c) => Math.max(0, c.outOff - c.inOff);
+const clipDur = (c) => clipLen(c) / SR;
+const clipEnd = (c) => c.start + clipDur(c);
+
+function songEnd() {
+  let end = 0;
+  for (const t of app.tracks) for (const c of t.clips) end = Math.max(end, clipEnd(c));
+  return end;
+}
+function findTrack(clip) {
+  return app.tracks.findIndex((t) => t.clips.includes(clip));
+}
+
+/* ------------------------------------------------------------- utilities */
+function fmt(sec) {
+  sec = Math.max(0, sec);
+  const m = Math.floor(sec / 60), s = Math.floor(sec % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+function fmtLong(sec) {
+  sec = Math.max(0, sec);
+  const m = Math.floor(sec / 60), s = Math.floor(sec % 60), t = Math.floor((sec * 10) % 10);
+  return `${m}:${String(s).padStart(2, "0")}.${t}`;
+}
+let toastTimer = null;
+function toast(text) {
+  const el = $("toast");
+  el.textContent = text;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 2600);
+}
+const midiName = (m) => NOTE_NAMES[((m % 12) + 12) % 12] + (Math.floor(m / 12) - 1);
+
+/* ============================ the sound engine ========================= */
+const engine = {
+  worker: null, ready: false, failed: false, waiting: new Map(), tag: 1,
+  start() {
+    // Opened by double-clicking the file? Browsers refuse to start workers and
+    // refuse to load modules from a file:// page, so nothing would ever sound.
+    // Say so plainly instead of spinning forever.
+    if (location.protocol === "file:") {
+      this.stopped("a page opened straight from disk cannot load the sound engine - "
+                 + "put it on a web address, or run “python -m http.server” in this "
+                 + "folder and open http://localhost:8000");
+      return;
+    }
+    const src = $("worker-source").textContent;
+    const url = URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+    this.worker = new Worker(url, { type: "module" });
+    this.worker.onmessage = (e) => this.heard(e.data);
+    this.worker.onerror = (e) => this.stopped(e.message || "the worker could not start");
+    // A copy of the runtime may sit next to this page. Exactly where depends
+    // on how the page is served, so look for it rather than assume, and tell
+    // the worker (a blob URL cannot resolve the page's relative paths).
+    findRuntime().then((home) => {
+      this.worker.postMessage({ type: "boot", home,
+                                source: $("dsp-source").textContent });
+    });
+  },
+  heard(m) {
+    if (m.type === "progress") { status(m.stage, "loading"); return; }
+    if (m.type === "ready") {
+      this.ready = true;
+      app.catalogue = m.catalogue;
+      fillPickers();
+      status("Sound engine ready", "ready");
+      refreshButtons();
+      return;
+    }
+    if (m.type === "failed") { this.stopped(m.message); return; }
+    const job = this.waiting.get(m.id);
+    if (!job) return;
+    this.waiting.delete(m.id);
+    m.type === "error" ? job.reject(new Error(m.message)) : job.resolve(m.data);
+  },
+  stopped(why) {
+    this.failed = true; this.ready = false;
+    status("Sound engine unavailable", "failed");
+    for (const job of this.waiting.values()) job.reject(new Error(why));
+    this.waiting.clear();
+    toast("Could not load the sound engine: " + why);
+    refreshButtons();
+  },
+  ask(type, payload, transfer) {
+    if (this.failed) return Promise.reject(new Error("the sound engine did not load"));
+    const id = this.tag++;
+    return new Promise((resolve, reject) => {
+      this.waiting.set(id, { resolve, reject });
+      this.worker.postMessage(Object.assign({ type, id }, payload), transfer || []);
+    });
+  },
+};
+
+/** Which of the plausible neighbours actually holds the Python runtime. */
+async function findRuntime() {
+  const tries = [];
+  try { tries.push(new URL("py/", document.baseURI).href); } catch (e) {}
+  try { tries.push(new URL("./py/", location.href).href); } catch (e) {}
+  try { tries.push(location.origin + "/py/"); } catch (e) {}
+  for (const home of [...new Set(tries)]) {
+    try {
+      const probe = await fetch(home + "pyodide-lock.json", { method: "GET" });
+      if (probe.ok) return home;
+    } catch (err) { /* not there; try the next */ }
+  }
+  return null;                      // fall back to the public mirrors
+}
+
+function status(text, cls) {
+  $("engineTxt").textContent = text;
+  $("engine").className = "engine " + (cls || "");
+}
+
+/* the cache that stops us re-rendering the same pattern twice */
+const partCache = new Map();
+const patternKey = (p) => JSON.stringify([p.kind, p.instrument, p.bpm, p.div, p.steps,
+                                          p.root_midi, p.cells]);
+async function renderPattern(pattern) {
+  const key = patternKey(pattern);
+  if (partCache.has(key)) return partCache.get(key);
+  const data = await engine.ask("part", { pattern });
+  if (partCache.size > 60) partCache.delete(partCache.keys().next().value);
+  partCache.set(key, data);
+  return data;
+}
+
+/* =============================== playback ============================== */
+let audio = null, node = null, gainNode = null;
+let playing = false, startedAt = 0, startedFrom = 0, mixed = null;
+
+function ctx() {
+  if (!audio) {
+    const Ctor = window.AudioContext || window.webkitAudioContext;
+    try { audio = new Ctor({ sampleRate: SR }); }
+    catch (err) { audio = new Ctor(); }      // older phones refuse a chosen rate
+    gainNode = audio.createGain();
+    gainNode.gain.value = $("vol").value / 100;
+    gainNode.connect(audio.destination);
+  }
+  return audio;
+}
+
+/** Sum every track into one stereo pair. Plain arithmetic, no Python. */
+function mixDown() {
+  const end = songEnd();
+  const n = Math.max(1, Math.ceil(end * SR) + 1);
+  const L = new Float32Array(n), R = new Float32Array(n);
+  const anySolo = app.tracks.some((t) => t.solo);
+
+  for (const track of app.tracks) {
+    if (track.mute || (anySolo && !track.solo)) continue;
+    const ang = (track.pan + 1) * Math.PI / 4;      // equal-power pan
+    const gl = track.volume * Math.cos(ang), gr = track.volume * Math.sin(ang);
+    for (const clip of track.clips) {
+      if (clip.muted) continue;
+      const len = clipLen(clip);
+      if (len <= 0) continue;
+      const at = Math.round(clip.start * SR);
+      const src = clip.buf, from = clip.inOff, g = clip.gain;
+      const stop = Math.min(len, n - at);
+      for (let i = 0; i < stop; i++) {
+        const v = src[from + i] * g;
+        L[at + i] += v * gl;
+        R[at + i] += v * gr;
+      }
+    }
+  }
+  return { L, R, n };
+}
+
+async function buildMix() {
+  if (mixed && !app.dirty) return mixed;
+  let { L, R, n } = mixDown();
+
+  if (app.eq.enabled && engine.ready) {
+    status("Applying the equaliser", "loading");
+    try {
+      const flat = await engine.ask("eq", { left: L, right: R, eq: app.eq },
+                                    [L.buffer, R.buffer]);   // hand them over, do not copy
+      L = new Float32Array(n); R = new Float32Array(n);
+      for (let i = 0; i < n; i++) { L[i] = flat[i * 2]; R[i] = flat[i * 2 + 1]; }
+    } catch (err) {
+      toast("Equaliser skipped: " + err.message);
+    }
+    status("Sound engine ready", "ready");
+  } else {
+    let peak = 0;
+    for (let i = 0; i < n; i++) {
+      const a = Math.abs(L[i]), b = Math.abs(R[i]);
+      if (a > peak) peak = a;
+      if (b > peak) peak = b;
+    }
+    if (peak > 1) {                                   // the same safety limiter
+      const k = 0.995 / peak;
+      for (let i = 0; i < n; i++) { L[i] *= k; R[i] *= k; }
+    }
+  }
+
+  const buffer = ctx().createBuffer(2, n, SR);
+  buffer.copyToChannel(L, 0);
+  buffer.copyToChannel(R, 1);
+  mixed = buffer;
+  app.dirty = false;
+  return buffer;
+}
+
+async function play() {
+  if (songEnd() <= 0) { toast("Nothing to play yet - write a part first"); return; }
+  await ctx().resume();
+  const buffer = await buildMix();
+  stopNode();
+  node = audio.createBufferSource();
+  node.buffer = buffer;
+  node.connect(gainNode);
+  node.onended = () => { if (playing && audio.currentTime - startedAt >= buffer.duration - 0.05) stop(); };
+  const from = app.playhead >= buffer.duration - 0.02 ? 0 : app.playhead;
+  node.start(0, from);
+  startedAt = audio.currentTime;
+  startedFrom = from;
+  playing = true;
+  paintPlayIcon();
+  tick();
+}
+function stopNode() {
+  if (node) { try { node.onended = null; node.stop(); } catch (e) {} node = null; }
+}
+function pause() {
+  if (!playing) return;
+  app.playhead = livePosition();
+  stopNode(); playing = false; paintPlayIcon(); draw();
+}
+function stop() {
+  stopNode(); playing = false; app.playhead = 0; paintPlayIcon(); draw();
+}
+const livePosition = () =>
+  playing ? Math.min(songEnd(), startedFrom + (audio.currentTime - startedAt)) : app.playhead;
+
+function mixChanged() {
+  app.dirty = true; mixed = null;
+  if (playing) { pause(); toast("Playback stopped - the mix changed"); }
+}
+function paintPlayIcon() {
+  $("icPlay").innerHTML = playing
+    ? '<rect x="3.5" y="3" width="3.2" height="10" rx="1"/><rect x="9.3" y="3" width="3.2" height="10" rx="1"/>'
+    : '<path d="M4 2.5v11l9-5.5z"/>';
+  $("bPlay").setAttribute("aria-label", playing ? "Pause" : "Play");
+}
+function tick() {
+  if (!playing) return;
+  $("clock").textContent = fmtLong(livePosition());
+  draw();
+  requestAnimationFrame(tick);
+}
+
+/* ============================== the timeline =========================== */
+const RULER = 26, TRACK_H = 74;
+const grid = $("grid"), gc = grid.getContext("2d");
+let dpr = 1;
+
+function sizeCanvas() {
+  dpr = window.devicePixelRatio || 1;
+  const wrap = $("scroller");
+  const seconds = Math.max(songEnd() + 8, wrap.clientWidth / app.zoom);
+  const w = Math.max(wrap.clientWidth, Math.ceil(seconds * app.zoom));
+  const h = RULER + app.tracks.length * TRACK_H;
+  grid.width = Math.round(w * dpr);
+  grid.height = Math.round(h * dpr);
+  grid.style.width = w + "px";
+  grid.style.height = h + "px";
+  gc.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { w, h };
+}
+
+function draw() {
+  const { w, h } = sizeCanvas();
+  const css = getComputedStyle(document.documentElement);
+  const C = (n) => css.getPropertyValue(n).trim();
+
+  gc.fillStyle = C("--bg"); gc.fillRect(0, 0, w, h);
+
+  /* ruler ------------------------------------------------------------- */
+  gc.fillStyle = C("--panel"); gc.fillRect(0, 0, w, RULER);
+  const beat = 60 / app.bpm;
+  const step = app.zoom * beat < 26 ? beat * 4 : beat;
+  gc.strokeStyle = C("--grid"); gc.fillStyle = C("--dim");
+  gc.font = "11px ui-sans-serif,system-ui,sans-serif";
+  gc.lineWidth = 1;
+  for (let t = 0, i = 0; t * app.zoom < w; t += step, i++) {
+    const x = Math.round(t * app.zoom) + 0.5;
+    const bar = Math.abs((t / beat) % 4) < 1e-6;
+    gc.beginPath(); gc.moveTo(x, bar ? 0 : RULER - 7); gc.lineTo(x, h); 
+    gc.strokeStyle = bar ? C("--grid-hi") : C("--grid");
+    gc.stroke();
+    if (bar) gc.fillText(fmt(t), x + 4, 15);
+  }
+
+  /* tracks ------------------------------------------------------------ */
+  app.tracks.forEach((track, i) => {
+    const y = RULER + i * TRACK_H;
+    if (i === app.cur) { gc.fillStyle = "rgba(77,163,255,.045)"; gc.fillRect(0, y, w, TRACK_H); }
+    gc.strokeStyle = C("--grid");
+    gc.beginPath(); gc.moveTo(0, y + TRACK_H + 0.5); gc.lineTo(w, y + TRACK_H + 0.5); gc.stroke();
+
+    for (const clip of track.clips) drawClip(clip, y, C);
+  });
+
+  /* playhead ---------------------------------------------------------- */
+  const px = Math.round(livePosition() * app.zoom) + 0.5;
+  gc.strokeStyle = C("--accent"); gc.lineWidth = 2;
+  gc.beginPath(); gc.moveTo(px, 0); gc.lineTo(px, h); gc.stroke();
+  gc.fillStyle = C("--accent");
+  gc.beginPath(); gc.moveTo(px - 5, 0); gc.lineTo(px + 5, 0); gc.lineTo(px, 8); gc.fill();
+
+  $("total").textContent = "/ " + fmt(songEnd());
+  if (!playing) $("clock").textContent = fmtLong(app.playhead);
+  $("empty").hidden = app.tracks.some((t) => t.clips.length);
+}
+
+function drawClip(clip, y, C) {
+  const x = clip.start * app.zoom;
+  const w = Math.max(3, clipDur(clip) * app.zoom);
+  const top = y + 5, h = TRACK_H - 12;
+  const chosen = clip === app.sel;
+
+  gc.save();
+  gc.beginPath();
+  if (gc.roundRect) gc.roundRect(x, top, w, h, 6); else gc.rect(x, top, w, h);
+  gc.clip();
+
+  gc.fillStyle = CLIP_COLORS[clip.color % CLIP_COLORS.length];
+  gc.globalAlpha = clip.muted ? 0.35 : 1;
+  gc.fillRect(x, top, w, h);
+
+  /* waveform */
+  const len = clipLen(clip);
+  if (len > 1 && w > 6) {
+    gc.globalAlpha = clip.muted ? 0.25 : 0.55;
+    gc.fillStyle = "#e9f2ff";
+    const mid = top + h / 2, half = h / 2 - 5;
+    const cols = Math.min(Math.floor(w), 1400);
+    const per = len / cols;
+    for (let i = 0; i < cols; i++) {
+      const a = clip.inOff + Math.floor(i * per);
+      const b = Math.min(clip.outOff, a + Math.max(1, Math.floor(per)));
+      let peak = 0;
+      for (let k = a; k < b; k += Math.max(1, Math.floor((b - a) / 24))) {
+        const v = Math.abs(clip.buf[k]);
+        if (v > peak) peak = v;
+      }
+      const hh = Math.max(0.6, peak * clip.gain * half);
+      gc.fillRect(x + i, mid - hh, 1, hh * 2);
+    }
+  }
+  gc.globalAlpha = 1;
+  gc.fillStyle = "rgba(6,10,16,.55)";
+  gc.fillRect(x, top, w, 16);
+  gc.fillStyle = "#eef3fa";
+  gc.font = "11.5px ui-sans-serif,system-ui,sans-serif";
+  gc.fillText(clip.name + (clip.muted ? "  (muted)" : ""), x + 6, top + 11.5);
+  gc.restore();
+
+  gc.strokeStyle = chosen ? C("--accent") : "rgba(0,0,0,.45)";
+  gc.lineWidth = chosen ? 2 : 1;
+  gc.beginPath();
+  if (gc.roundRect) gc.roundRect(x + 0.5, top + 0.5, w - 1, h - 1, 6);
+  else gc.rect(x + 0.5, top + 0.5, w - 1, h - 1);
+  gc.stroke();
+}
+
+/* ------------------------------------------------------- track headers */
+function drawNames() {
+  const list = $("nameList");
+  list.innerHTML = "";
+  app.tracks.forEach((track, i) => {
+    const row = document.createElement("div");
+    row.className = "trk" + (i === app.cur ? " on" : "");
+    row.style.height = TRACK_H + "px";
+    row.onclick = () => { app.cur = i; drawNames(); draw(); };
+
+    const nm = document.createElement("div");
+    nm.className = "nm";
+    nm.textContent = track.name;
+    nm.title = "Double-click to rename";
+    nm.ondblclick = (e) => {
+      e.stopPropagation();
+      const got = prompt("Track name", track.name);
+      if (got) { track.name = got.trim() || track.name; drawNames(); }
+    };
+
+    const r1 = document.createElement("div");
+    r1.className = "row";
+    const m = document.createElement("button");
+    m.className = "mini" + (track.mute ? " hot" : "");
+    m.textContent = "M"; m.title = "Mute";
+    m.onclick = (e) => { e.stopPropagation(); track.mute = !track.mute; mixChanged(); drawNames(); };
+    const s = document.createElement("button");
+    s.className = "mini solo" + (track.solo ? " hot" : "");
+    s.textContent = "S"; s.title = "Solo";
+    s.onclick = (e) => { e.stopPropagation(); track.solo = !track.solo; mixChanged(); drawNames(); };
+    const vol = document.createElement("input");
+    vol.type = "range"; vol.min = 0; vol.max = 100; vol.value = Math.round(track.volume * 100);
+    vol.title = "Track volume";
+    vol.oninput = () => { track.volume = vol.value / 100; mixChanged(); };
+    vol.onclick = (e) => e.stopPropagation();
+    r1.append(m, s, vol);
+
+    row.append(nm, r1);
+    list.appendChild(row);
+  });
+}
+
+/* ------------------------------------------------------- mouse & touch */
+let drag = null;
+
+function atEvent(e) {
+  const box = grid.getBoundingClientRect();
+  const p = e.touches ? e.touches[0] : e;
+  return { x: p.clientX - box.left, y: p.clientY - box.top };
+}
+function clipAt(x, y) {
+  const row = Math.floor((y - RULER) / TRACK_H);
+  if (row < 0 || row >= app.tracks.length) return null;
+  const t = x / app.zoom;
+  for (const clip of app.tracks[row].clips) {
+    if (t >= clip.start && t <= clipEnd(clip)) return clip;
+  }
+  return null;
+}
+
+function onDown(e) {
+  const { x, y } = atEvent(e);
+  const touch = !!e.touches;
+  if (touch && y >= RULER && !clipAt(x, y)) {
+    // empty space on a phone: let the finger scroll the timeline instead
+    app.playhead = Math.max(0, x / app.zoom);
+    const row = Math.floor((y - RULER) / TRACK_H);
+    if (row >= 0 && row < app.tracks.length) { app.cur = row; drawNames(); }
+    app.sel = null; refreshButtons(); draw();
+    return;
+  }
+  if (y < RULER) {
+    app.playhead = Math.max(0, x / app.zoom);
+    if (playing) { pause(); }
+    drag = { kind: "scrub" };
+    draw();
+    return;
+  }
+  const row = Math.floor((y - RULER) / TRACK_H);
+  if (row >= 0 && row < app.tracks.length) { app.cur = row; drawNames(); }
+  const clip = clipAt(x, y);
+  app.sel = clip;
+  if (clip) {
+    drag = { kind: "move", clip, grabbed: x / app.zoom - clip.start, from: row, moved: false,
+             before: snapshot() };
+  } else {
+    app.playhead = Math.max(0, x / app.zoom);
+    drag = { kind: "scrub" };
+  }
+  refreshButtons();
+  draw();
+  if (e.cancelable) e.preventDefault();
+}
+function onMove(e) {
+  if (!drag) return;
+  const { x, y } = atEvent(e);
+  if (drag.kind === "scrub") {
+    app.playhead = Math.max(0, x / app.zoom);
+    draw();
+  } else if (drag.kind === "move") {
+    const want = Math.max(0, x / app.zoom - drag.grabbed);
+    drag.clip.start = want;
+    const row = Math.max(0, Math.min(app.tracks.length - 1, Math.floor((y - RULER) / TRACK_H)));
+    if (row !== drag.from) {
+      app.tracks[drag.from].clips = app.tracks[drag.from].clips.filter((c) => c !== drag.clip);
+      app.tracks[row].clips.push(drag.clip);
+      drag.from = row;
+      app.cur = row;
+      drawNames();
+    }
+    drag.moved = true;
+    draw();
+  }
+  if (e.cancelable) e.preventDefault();
+}
+function onUp() {
+  if (drag && drag.kind === "move" && drag.moved) {
+    app.undo.push(drag.before); app.redo.length = 0;
+    mixChanged();
+    refreshButtons();
+  }
+  drag = null;
+}
+grid.addEventListener("mousedown", onDown);
+window.addEventListener("mousemove", onMove);
+window.addEventListener("mouseup", onUp);
+grid.addEventListener("touchstart", onDown, { passive: false });
+window.addEventListener("touchmove", onMove, { passive: false });
+window.addEventListener("touchend", onUp);
+$("scroller").addEventListener("scroll", () => { $("nameList").style.transform =
+  `translateY(${-$("scroller").scrollTop}px)`; });
+window.addEventListener("resize", () => { draw(); });
+
+/* =============================== editing =============================== */
+function snapshot() {
+  return app.tracks.map((t) => ({
+    meta: { name: t.name, volume: t.volume, pan: t.pan, mute: t.mute, solo: t.solo },
+    clips: t.clips.map((c) => ({ clip: c, state: {
+      name: c.name, start: c.start, inOff: c.inOff, outOff: c.outOff,
+      gain: c.gain, muted: c.muted, color: c.color, buf: c.buf, source: c.source } })),
+  }));
+}
+function restore(shot) {
+  app.tracks = shot.map((entry) => {
+    const t = newTrack(entry.meta.name);
+    Object.assign(t, entry.meta);
+    t.clips = entry.clips.map(({ clip, state }) => Object.assign(clip, state));
+    return t;
+  });
+  app.cur = Math.min(app.cur, app.tracks.length - 1);
+  if (app.sel && findTrack(app.sel) < 0) app.sel = null;
+}
+function push() { app.undo.push(snapshot()); app.redo.length = 0; if (app.undo.length > 60) app.undo.shift(); }
+function undo() {
+  if (!app.undo.length) { toast("Nothing to undo"); return; }
+  app.redo.push(snapshot()); restore(app.undo.pop());
+  mixChanged(); drawNames(); draw(); refreshButtons();
+}
+function redo() {
+  if (!app.redo.length) { toast("Nothing to redo"); return; }
+  app.undo.push(snapshot()); restore(app.redo.pop());
+  mixChanged(); drawNames(); draw(); refreshButtons();
+}
+
+function addClip(clip, trackIndex) {
+  const i = Math.max(0, Math.min(trackIndex === undefined ? app.cur : trackIndex,
+                                 app.tracks.length - 1));
+  push();
+  app.tracks[i].clips.push(clip);
+  app.sel = clip;
+  mixChanged(); drawNames(); draw(); refreshButtons();
+}
+
+/** Cut one piece of audio into two at the playhead. */
+function splitClip() {
+  const at = app.playhead;
+  let clip = app.sel && app.sel.start < at && at < clipEnd(app.sel) ? app.sel : null;
+  if (!clip) {
+    const order = [app.cur, ...app.tracks.keys()].filter((v, i, a) => a.indexOf(v) === i);
+    for (const i of order) {
+      const hit = (app.tracks[i] || { clips: [] }).clips.find((c) => c.start < at && at < clipEnd(c));
+      if (hit) { clip = hit; break; }
+    }
+  }
+  if (!clip) { toast("Put the playhead over a clip, then split"); return; }
+  if (at - clip.start < 0.02 || clipEnd(clip) - at < 0.02) {
+    toast("Too close to the edge to split"); return;
+  }
+  const index = findTrack(clip);
+  push();
+  const cut = clip.inOff + Math.round((at - clip.start) * SR);
+  const base = clip.name.replace(/\s+\d+$/, "").trim() || "clip";
+  const right = Object.assign({}, clip, {
+    id: nextId++, name: base + " 2", inOff: cut, start: at,
+  });
+  clip.name = base + " 1";
+  clip.outOff = cut;
+  app.tracks[index].clips.push(right);
+  app.sel = clip;
+  mixChanged(); draw(); refreshButtons();
+  toast(`Split into “${clip.name}” and “${right.name}”`);
+}
+
+function duplicateClip() {
+  if (!app.sel) { toast("Select a clip first"); return; }
+  const index = findTrack(app.sel);
+  if (index < 0) return;
+  push();
+  const twin = Object.assign({}, app.sel, { id: nextId++, start: clipEnd(app.sel) });
+  app.tracks[index].clips.push(twin);
+  app.sel = twin;
+  mixChanged(); draw(); refreshButtons();
+}
+function deleteClip() {
+  if (!app.sel) { toast("Select a clip first"); return; }
+  const index = findTrack(app.sel);
+  if (index < 0) return;
+  push();
+  app.tracks[index].clips = app.tracks[index].clips.filter((c) => c !== app.sel);
+  app.sel = null;
+  mixChanged(); draw(); refreshButtons();
+}
+function addTrack() {
+  push();
+  app.tracks.push(newTrack("Track " + (app.tracks.length + 1)));
+  app.cur = app.tracks.length - 1;
+  drawNames(); draw();
+}
+
+function refreshButtons() {
+  const has = !!app.sel;
+  $("bDup").disabled = !has;
+  $("bDel").disabled = !has;
+  $("bUndo").disabled = !app.undo.length;
+  $("bRedo").disabled = !app.redo.length;
+  const busy = !engine.ready;
+  $("bMel").disabled = busy;
+  $("bDrum").disabled = busy;
+  $("bPlay").disabled = engine.failed;
+  $("bWav").disabled = engine.failed;
+}
+
+/* =========================== the pattern editor ======================== */
+const roll = { kind: "melody", cells: new Set(), painting: null, editing: null };
+const rollCanvas = $("roll"), rc = rollCanvas.getContext("2d");
+// Fingers need room. A mouse does not, and a tighter grid shows more bars.
+const COARSE = window.matchMedia("(pointer: coarse)").matches;
+const CELL_W = COARSE ? 38 : 30, CELL_H = COARSE ? 27 : 17;
+
+const rollSteps = () => Math.max(1, +$("bars").value) * 4 * Math.max(1, +$("div").value);
+const rollRows = () => (roll.kind === "drums" ? (app.catalogue ? app.catalogue.drums.length : 18) : ROLL_ROWS);
+const rootMidi = () => 12 * (+$("oct").value + 1);
+
+function openRoll(kind) {
+  if (!engine.ready) { toast("The sound engine is still loading"); return; }
+  roll.kind = kind;
+  roll.cells.clear();
+  roll.editing = null;
+  $("rollTitle").textContent = kind === "drums" ? "Write a drum part" : "Write a part";
+  $("instrField").style.display = kind === "drums" ? "none" : "";
+  $("octField").style.display = kind === "drums" ? "none" : "";
+  $("rollVeil").hidden = false;
+  drawRoll();
+}
+function closeRoll() { $("rollVeil").hidden = true; }
+
+function drawRoll() {
+  const steps = rollSteps(), rows = rollRows();
+  const labelW = roll.kind === "drums" ? 92 : 46;
+  const w = labelW + steps * CELL_W, h = rows * CELL_H;
+  const scale = window.devicePixelRatio || 1;
+  rollCanvas.width = w * scale; rollCanvas.height = h * scale;
+  rollCanvas.style.width = w + "px"; rollCanvas.style.height = h + "px";
+  rc.setTransform(scale, 0, 0, scale, 0, 0);
+
+  const css = getComputedStyle(document.documentElement);
+  const C = (n) => css.getPropertyValue(n).trim();
+  const div = Math.max(1, +$("div").value);
+
+  rc.fillStyle = C("--bg"); rc.fillRect(0, 0, w, h);
+  rc.font = "10.5px ui-sans-serif,system-ui,sans-serif";
+  rc.textBaseline = "middle";
+
+  for (let r = 0; r < rows; r++) {
+    const y = r * CELL_H;
+    const name = roll.kind === "drums"
+      ? app.catalogue.drums[r]
+      : midiName(rootMidi() + (rows - 1 - r));
+    const dark = roll.kind === "melody" && [1, 3, 6, 8, 10].includes(
+      ((rootMidi() + (rows - 1 - r)) % 12 + 12) % 12);
+    rc.fillStyle = dark ? "rgba(255,255,255,.022)" : "transparent";
+    if (dark) rc.fillRect(labelW, y, w - labelW, CELL_H);
+    rc.fillStyle = C("--dim");
+    rc.fillText(name, 5, y + CELL_H / 2);
+    rc.strokeStyle = C("--grid");
+    rc.beginPath(); rc.moveTo(labelW, y + 0.5); rc.lineTo(w, y + 0.5); rc.stroke();
+  }
+  for (let s = 0; s <= steps; s++) {
+    const x = labelW + s * CELL_W + 0.5;
+    rc.strokeStyle = s % (4 * div) === 0 ? C("--grid-hi") : (s % div === 0 ? C("--grid") : "rgba(255,255,255,.04)");
+    rc.beginPath(); rc.moveTo(x, 0); rc.lineTo(x, h); rc.stroke();
+  }
+  rc.fillStyle = C("--accent");
+  for (const key of roll.cells) {
+    const [r, s] = key.split(",").map(Number);
+    if (r >= rows || s >= steps) continue;
+    rc.fillRect(labelW + s * CELL_W + 2, r * CELL_H + 2, CELL_W - 4, CELL_H - 4);
+  }
+  rc.strokeStyle = C("--grid-hi");
+  rc.beginPath(); rc.moveTo(labelW + 0.5, 0); rc.lineTo(labelW + 0.5, h); rc.stroke();
+  $("rollHint").textContent = `${roll.cells.size} note${roll.cells.size === 1 ? "" : "s"} · ${steps} steps`;
+}
+
+function rollHit(e) {
+  const box = rollCanvas.getBoundingClientRect();
+  const p = e.touches ? e.touches[0] : e;
+  const labelW = roll.kind === "drums" ? 92 : 46;
+  const s = Math.floor((p.clientX - box.left - labelW) / CELL_W);
+  const r = Math.floor((p.clientY - box.top) / CELL_H);
+  if (s < 0 || r < 0 || s >= rollSteps() || r >= rollRows()) return null;
+  return { r, s, key: r + "," + s };
+}
+function rollDown(e) {
+  const hit = rollHit(e);
+  if (!hit) return;
+  roll.painting = roll.cells.has(hit.key) ? "off" : "on";
+  rollPaint(hit);
+  if (e.cancelable) e.preventDefault();
+}
+function rollPaint(hit) {
+  if (roll.painting === "on") {
+    if (!roll.cells.has(hit.key)) {
+      roll.cells.add(hit.key);
+      if ($("preview").checked) previewCell(hit.r);
+    }
+  } else roll.cells.delete(hit.key);
+  drawRoll();
+}
+rollCanvas.addEventListener("mousedown", rollDown);
+rollCanvas.addEventListener("mousemove", (e) => { if (roll.painting) { const h = rollHit(e); if (h) rollPaint(h); } });
+// On a touch screen a drag is how you scroll the grid, so a note is placed
+// by a tap and nothing is painted by dragging.
+rollCanvas.addEventListener("touchstart", (e) => {
+  const hit = rollHit(e);
+  if (!hit) return;
+  roll.tapped = hit;
+}, { passive: true });
+rollCanvas.addEventListener("touchmove", () => { roll.tapped = null; }, { passive: true });
+rollCanvas.addEventListener("touchend", (e) => {
+  if (!roll.tapped) return;
+  const hit = roll.tapped;
+  roll.tapped = null;
+  roll.painting = roll.cells.has(hit.key) ? "off" : "on";
+  rollPaint(hit);
+  roll.painting = null;
+  if (e.cancelable) e.preventDefault();
+}, { passive: false });
+window.addEventListener("mouseup", () => { roll.painting = null; });
+window.addEventListener("touchend", () => { roll.painting = null; });
+
+let previewGate = 0;
+async function previewCell(row) {
+  const now = performance.now();
+  if (now - previewGate < 45) return;
+  previewGate = now;
+  try {
+    const data = roll.kind === "drums"
+      ? await engine.ask("drum", { name: app.catalogue.drums[row] })
+      : await engine.ask("note", { instrument: $("instr").value,
+          midi: rootMidi() + (rollRows() - 1 - row), seconds: 0.45 });
+    const buf = ctx().createBuffer(1, data.length, SR);
+    buf.copyToChannel(data, 0);
+    const src = audio.createBufferSource();
+    src.buffer = buf; src.connect(gainNode); src.start();
+  } catch (err) { /* a missed preview is not worth interrupting anyone over */ }
+}
+
+function currentPattern() {
+  const cells = [...roll.cells].map((k) => k.split(",").map(Number))
+    .filter(([r, s]) => r < rollRows() && s < rollSteps())
+    .map(([r, s]) => (roll.kind === "drums" ? [r, s] : [rollRows() - 1 - r, s]));
+  return {
+    kind: roll.kind, name: roll.kind === "drums" ? "Beat" : "Melody",
+    instrument: roll.kind === "drums" ? "" : $("instr").value,
+    bpm: app.bpm, div: Math.max(1, +$("div").value), steps: rollSteps(),
+    rows: rollRows(), root_midi: rootMidi(), cells,
+  };
+}
+
+async function addPattern() {
+  if (!roll.cells.size) { toast("Place a few notes first"); return; }
+  const pattern = currentPattern();
+  $("rollAdd").disabled = true;
+  status("Rendering the part", "loading");
+  try {
+    const data = await renderPattern(pattern);
+    const wanted = pattern.kind === "drums" ? "Drums" : pattern.instrument;
+    let index = app.tracks.findIndex((t) => t.name === wanted);
+    if (index < 0) {
+      app.tracks.push(newTrack(wanted));
+      index = app.tracks.length - 1;
+    }
+    app.cur = index;
+    const n = app.tracks[index].clips.length + 1;
+    addClip(makeClip(`${pattern.name} ${n}`, data, app.playhead,
+                     { type: "pattern", pattern }, index), index);
+    closeRoll();
+    toast(`Added “${pattern.name} ${n}” to ${wanted}`);
+  } catch (err) {
+    toast("Could not render that: " + err.message);
+  } finally {
+    $("rollAdd").disabled = false;
+    status("Sound engine ready", "ready");
+  }
+}
+
+/* ============================ import / export ========================== */
+async function importFiles(files) {
+  const list = [...files].filter((f) => f.size);
+  if (!list.length) return;
+  status(`Reading ${list.length} file${list.length > 1 ? "s" : ""}`, "loading");
+  let added = 0;
+  for (const file of list) {
+    try {
+      // Phones often run their audio at 48 kHz. Decoding through an offline
+      // context pinned to 44.1 kHz resamples for us, so imported audio lines
+      // up with the parts instead of playing slightly fast or slow.
+      const bytes = await file.arrayBuffer();
+      const shop = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 1, SR);
+      const decoded = await shop.decodeAudioData(bytes);
+      const n = decoded.length;
+      const mono = new Float32Array(n);
+      for (let ch = 0; ch < decoded.numberOfChannels; ch++) {
+        const data = decoded.getChannelData(ch);
+        for (let i = 0; i < n; i++) mono[i] += data[i];
+      }
+      if (decoded.numberOfChannels > 1) {
+        for (let i = 0; i < n; i++) mono[i] /= decoded.numberOfChannels;
+      }
+      const name = file.name.replace(/\.[^.]+$/, "");
+      let index = app.tracks.findIndex((t) => t.name === "Audio");
+      if (index < 0) { app.tracks.push(newTrack("Audio")); index = app.tracks.length - 1; }
+      app.cur = index;
+      addClip(makeClip(name, mono, app.playhead, { type: "file" }, 5), index);
+      added++;
+    } catch (err) {
+      toast(`Could not read ${file.name} - the browser does not know that format`);
+    }
+  }
+  status(engine.ready ? "Sound engine ready" : "Starting the sound engine",
+         engine.ready ? "ready" : "loading");
+  if (added) toast(`Imported ${added} file${added > 1 ? "s" : ""}`);
+}
+
+function wavBytes(buffer) {
+  const n = buffer.length, chans = 2, bps = 2;
+  const bytes = new ArrayBuffer(44 + n * chans * bps);
+  const view = new DataView(bytes);
+  const text = (at, s) => { for (let i = 0; i < s.length; i++) view.setUint8(at + i, s.charCodeAt(i)); };
+  text(0, "RIFF"); view.setUint32(4, 36 + n * chans * bps, true); text(8, "WAVE");
+  text(12, "fmt "); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+  view.setUint16(22, chans, true); view.setUint32(24, SR, true);
+  view.setUint32(28, SR * chans * bps, true); view.setUint16(32, chans * bps, true);
+  view.setUint16(34, 16, true);
+  text(36, "data"); view.setUint32(40, n * chans * bps, true);
+  const L = buffer.getChannelData(0), R = buffer.getChannelData(1);
+  let at = 44;
+  for (let i = 0; i < n; i++) {
+    for (const ch of [L, R]) {
+      const v = Math.max(-1, Math.min(1, ch[i]));
+      view.setInt16(at, v < 0 ? v * 0x8000 : v * 0x7fff, true);
+      at += 2;
+    }
+  }
+  return new Blob([bytes], { type: "audio/wav" });
+}
+async function download(blob, name) {
+  // Inside the claude.ai viewer a page cannot start a download itself; it
+  // asks the host, which shows the viewer a confirmation. Everywhere else
+  // an ordinary link is the way.
+  try {
+    const saver = window.claude && await window.claude.use("downloads");
+    if (saver) {
+      await saver.save({ filename: name, data: new Uint8Array(await blob.arrayBuffer()) });
+      return true;
+    }
+  } catch (err) {
+    if (String(err && err.code) === "cancelled") return false;
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+  return true;
+}
+async function exportWav() {
+  if (songEnd() <= 0) { toast("Nothing to export yet"); return; }
+  $("bWav").disabled = true;
+  status("Rendering the mix", "loading");
+  try {
+    const saved = await download(wavBytes(await buildMix()), "music-studio-mix.wav");
+    toast(saved ? "Saved to your downloads" : "Save cancelled");
+  } catch (err) {
+    toast("Export failed: " + err.message);
+  } finally {
+    $("bWav").disabled = false;
+    status("Sound engine ready", "ready");
+  }
+}
+
+/* project files: patterns are re-rendered on open, imported audio is inlined */
+function projectJson() {
+  return JSON.stringify({
+    app: "Music Studio", version: 1, bpm: app.bpm, eq: app.eq,
+    tracks: app.tracks.map((t) => ({
+      name: t.name, volume: t.volume, pan: t.pan, mute: t.mute, solo: t.solo,
+      clips: t.clips.map((c) => ({
+        name: c.name, start: c.start, inOff: c.inOff, outOff: c.outOff,
+        gain: c.gain, muted: c.muted, color: c.color, source: c.source,
+        audio: c.source.type === "file" ? [...c.buf].map((v) => Math.round(v * 32767)) : null,
+      })),
+    })),
+  });
+}
+async function openProject(text) {
+  const data = JSON.parse(text);
+  if (!data || !Array.isArray(data.tracks)) throw new Error("that is not a Music Studio project");
+  push();
+  app.bpm = data.bpm || 110;
+  $("bpm").value = app.bpm;
+  if (data.eq) { app.eq = data.eq; syncEq(); }
+  const tracks = [];
+  for (const t of data.tracks) {
+    const track = newTrack(t.name || "Track");
+    Object.assign(track, { volume: t.volume ?? 0.85, pan: t.pan ?? 0,
+                           mute: !!t.mute, solo: !!t.solo });
+    for (const c of t.clips || []) {
+      let buf;
+      if (c.source && c.source.type === "pattern") buf = await renderPattern(c.source.pattern);
+      else if (c.audio) {
+        buf = new Float32Array(c.audio.length);
+        for (let i = 0; i < c.audio.length; i++) buf[i] = c.audio[i] / 32767;
+      } else continue;
+      const clip = makeClip(c.name, buf, c.start, c.source, c.color);
+      Object.assign(clip, { inOff: c.inOff ?? 0, outOff: c.outOff ?? buf.length,
+                            gain: c.gain ?? 1, muted: !!c.muted });
+      track.clips.push(clip);
+    }
+    tracks.push(track);
+  }
+  app.tracks = tracks;
+  app.cur = 0; app.sel = null; app.playhead = 0;
+  mixChanged(); drawNames(); draw(); refreshButtons();
+}
+
+/* keep work across a refresh */
+function remember() {
+  try { localStorage.setItem("music-studio-project", projectJson()); } catch (e) {}
+}
+async function recall() {
+  let saved = null;
+  try { saved = localStorage.getItem("music-studio-project"); } catch (e) { return false; }
+  if (!saved) return false;
+  try {
+    await openProject(saved);
+    app.undo.length = 0;
+    return app.tracks.some((t) => t.clips.length);
+  } catch (e) { return false; }
+}
+
+/* ================================= EQ ================================== */
+function buildEq() {
+  const row = $("eqRow");
+  row.innerHTML = "";
+  const bands = app.catalogue ? app.catalogue.eq_bands : [31,62,125,250,500,1000,2000,4000,8000,16000];
+  bands.forEach((hz, i) => {
+    const cell = document.createElement("div");
+    cell.className = "eqband";
+    const slider = document.createElement("input");
+    slider.type = "range"; slider.min = -12; slider.max = 12; slider.step = 0.5;
+    slider.value = app.eq.bands[i] || 0;
+    slider.setAttribute("aria-label", hz + " hertz");
+    const tag = document.createElement("span");
+    tag.textContent = hz >= 1000 ? hz / 1000 + "k" : hz;
+    slider.oninput = () => {
+      app.eq.bands[i] = +slider.value;
+      app.eq.preset = "Custom";
+      $("eqPreset").value = "Custom";
+      $("eqOn").checked = app.eq.enabled = true;
+      mixChanged();
+    };
+    cell.append(slider, tag);
+    row.appendChild(cell);
+  });
+}
+function syncEq() {
+  $("eqOn").checked = app.eq.enabled;
+  if ($("eqPreset").options.length) $("eqPreset").value = app.eq.preset || "Custom";
+  buildEq();
+}
+async function usePreset(name) {
+  if (engine.ready) {
+    try {
+      Object.assign(app.eq, JSON.parse(await engine.ask("preset", { name })));
+    } catch (err) { /* keep whatever is already set */ }
+  }
+  app.eq.preset = name;
+  app.eq.enabled = name !== "Flat";
+  syncEq();
+  mixChanged();
+}
+
+/* =============================== wiring ================================ */
+function fillPickers() {
+  const instr = $("instr");
+  instr.innerHTML = "";
+  for (const [family, names] of Object.entries(app.catalogue.families)) {
+    const group = document.createElement("optgroup");
+    group.label = family;
+    for (const n of names) {
+      const o = document.createElement("option");
+      o.value = o.textContent = n;
+      group.appendChild(o);
+    }
+    instr.appendChild(group);
+  }
+  instr.value = "Grand Piano";
+  const preset = $("eqPreset");
+  preset.innerHTML = "";
+  for (const name of app.catalogue.eq_presets) {
+    const o = document.createElement("option");
+    o.value = o.textContent = name;
+    preset.appendChild(o);
+  }
+  preset.value = app.eq.preset;
+  buildEq();
+}
+
+$("bPlay").onclick = () => (playing ? pause() : play());
+$("bStop").onclick = stop;
+$("bMel").onclick = () => openRoll("melody");
+$("bDrum").onclick = () => openRoll("drums");
+$("bImport").onclick = () => $("fileAudio").click();
+$("fileAudio").onchange = (e) => { importFiles(e.target.files); e.target.value = ""; };
+$("bSplit").onclick = splitClip;
+$("bDup").onclick = duplicateClip;
+$("bDel").onclick = deleteClip;
+$("bUndo").onclick = undo;
+$("bRedo").onclick = redo;
+$("bTrack").onclick = addTrack;
+$("bWav").onclick = exportWav;
+$("bSave").onclick = async () => {
+  const saved = await download(new Blob([projectJson()], { type: "application/json" }),
+                               "music-studio-project.json");
+  toast(saved ? "Project saved" : "Save cancelled");
+};
+$("bOpen").onclick = () => $("fileProj").click();
+$("fileProj").onchange = async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  try { await openProject(await file.text()); toast("Project opened"); }
+  catch (err) { toast("Could not open that: " + err.message); }
+};
+$("bpm").onchange = () => { app.bpm = Math.max(40, Math.min(240, +$("bpm").value || 110)); draw(); };
+$("vol").oninput = () => { if (gainNode) gainNode.gain.value = $("vol").value / 100; };
+$("bEq").onclick = () => { $("eqVeil").hidden = false; };
+$("eqClose").onclick = () => { $("eqVeil").hidden = true; };
+$("eqOn").onchange = () => { app.eq.enabled = $("eqOn").checked; mixChanged(); };
+$("eqPreset").onchange = () => usePreset($("eqPreset").value);
+$("eqFlat").onclick = () => { app.eq.bands = new Array(10).fill(0); app.eq.drive = 0;
+                              app.eq.output = 0; app.eq.enabled = false;
+                              app.eq.preset = "Flat"; syncEq(); mixChanged(); };
+$("rollAdd").onclick = addPattern;
+$("rollClose").onclick = closeRoll;
+$("rollClear").onclick = () => { roll.cells.clear(); drawRoll(); };
+$("bars").oninput = drawRoll;
+$("div").oninput = drawRoll;
+$("oct").oninput = drawRoll;
+$("instr").onchange = () => { if ($("preview").checked) previewCell(rollRows() - 13); };
+
+document.addEventListener("keydown", (e) => {
+  const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName);
+  if (e.key === "Escape") {
+    if (!$("rollVeil").hidden) return closeRoll();
+    if (!$("eqVeil").hidden) return ($("eqVeil").hidden = true);
+    return stop();
+  }
+  if (typing) return;
+  const meta = e.ctrlKey || e.metaKey;
+  if (meta && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+  if (meta) return;
+  if (e.code === "Space") { e.preventDefault(); playing ? pause() : play(); }
+  else if (e.key === "b" || e.key === "B") splitClip();
+  else if (e.key === "d" || e.key === "D") duplicateClip();
+  else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); deleteClip(); }
+});
+
+/* drag a file anywhere onto the page */
+["dragenter", "dragover"].forEach((ev) =>
+  document.addEventListener(ev, (e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }));
+document.addEventListener("drop", (e) => {
+  e.preventDefault();
+  if (e.dataTransfer.files.length) importFiles(e.dataTransfer.files);
+});
+
+window.addEventListener("beforeunload", remember);
+setInterval(remember, 20000);
+
+/* ================================ start ================================ */
+(async function init() {
+  app.tracks = [newTrack("Track 1"), newTrack("Track 2"), newTrack("Drums")];
+  drawNames();
+  draw();
+  refreshButtons();
+  engine.start();
+  if (await recall()) toast("Picked up where you left off");
+  draw();
+})();
+
+/* ========================== the built-in self test =====================
+ *  Open the page with ?selftest and it renders a fixed set of sounds and
+ *  compares them against fingerprints taken from the desktop app. That is
+ *  the proof that numpy running as WebAssembly gives the same answer as
+ *  numpy running on a PC - which cannot be checked anywhere but here, in
+ *  a real browser on a real connection.
+ * ===================================================================== */
+async function selfTest() {
+  const cases = JSON.parse($("reference-data").textContent);
+  const board = document.createElement("div");
+  board.style.cssText = `position:fixed;inset:0;z-index:99;overflow:auto;padding:22px;
+    background:#15171c;font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;color:#e8eaed`;
+  board.innerHTML = `<h1 style="font:600 17px/1.4 ui-sans-serif,system-ui;margin:0 0 4px">
+      Engine self test</h1>
+    <p style="color:#878d9b;margin:0 0 16px;font-family:ui-sans-serif,system-ui">
+      Rendering the same sounds the desktop app makes, then comparing.</p>
+    <div id="stLines"></div>`;
+  document.body.appendChild(board);
+  const lines = board.querySelector("#stLines");
+  const line = (html) => {
+    const row = document.createElement("div");
+    row.innerHTML = html;
+    lines.appendChild(row);
+    return row;
+  };
+
+  const waiting = line("waiting for the sound engine...");
+  const t0 = performance.now();
+  await new Promise((done) => {
+    const poll = setInterval(() => {
+      if (engine.ready || engine.failed) { clearInterval(poll); done(); }
+    }, 60);
+  });
+  if (engine.failed) {
+    waiting.innerHTML = `<span style="color:#e0645f">FAILED</span> the engine did not load`;
+    return;
+  }
+  const bootMs = Math.round(performance.now() - t0);
+  waiting.innerHTML = `engine ready in <b>${(bootMs / 1000).toFixed(1)}s</b>`;
+  line("&nbsp;");
+
+  let bad = 0, slowest = 0;
+  const made = {};
+  for (const want of cases) {
+    const row = line(`<span style="color:#878d9b">running</span> ${want.label}`);
+    try {
+      const at = performance.now();
+      let data;
+      if (want.kind === "eq") {
+        const src = made[want.arg.from];
+        data = await engine.ask("eq", { left: src, right: src, eq: want.arg.eq });
+      } else {
+        data = await engine.ask(want.kind, want.arg);
+      }
+      const ms = performance.now() - at;
+      slowest = Math.max(slowest, ms);
+      made[want.label] = data;
+
+      let peak = 0, sum = 0;
+      for (let i = 0; i < data.length; i++) {
+        const v = data[i];
+        if (Math.abs(v) > peak) peak = Math.abs(v);
+        sum += v * v;
+      }
+      const rms = Math.sqrt(sum / data.length);
+      const near = (a, b) => Math.abs(a - b) <= 2e-4 + Math.abs(b) * 2e-4;
+      const good = data.length === want.n && near(peak, want.peak) && near(rms, want.rms);
+      if (!good) bad++;
+      row.innerHTML =
+        `<span style="color:${good ? "#4bbf73" : "#e0645f"}">${good ? "MATCH" : "DIFFERS"}</span> ` +
+        `${want.label} &nbsp;<span style="color:#878d9b">` +
+        `${data.length} samples, peak ${peak.toFixed(6)}, rms ${rms.toFixed(6)}` +
+        (good ? "" : ` &nbsp;expected ${want.n} / ${want.peak} / ${want.rms}`) +
+        ` &nbsp;· ${ms.toFixed(0)} ms</span>`;
+    } catch (err) {
+      bad++;
+      row.innerHTML = `<span style="color:#e0645f">ERROR</span> ${want.label}: ${err.message}`;
+    }
+  }
+  line("&nbsp;");
+  line(`<b style="color:${bad ? "#e0645f" : "#4bbf73"};font-size:15px">` +
+       (bad ? `${bad} of ${cases.length} did not match`
+            : `all ${cases.length} match the desktop app`) + `</b>`);
+  line(`<span style="color:#878d9b">slowest single render ${slowest.toFixed(0)} ms` +
+       ` · engine ready ${(bootMs / 1000).toFixed(1)}s after opening the page</span>`);
+  line(`<br><a href="?" style="color:#4da3ff">go to the studio</a>`);
+}
+if (/selftest/.test(location.search) || /selftest/.test(location.hash)) selfTest();
+</script>
+<script>/* =====================================================================
+ *  Microphone, video export and file conversion.
+ *
+ *  The desktop app leans on ffmpeg for all three. A browser tab has no
+ *  ffmpeg, but it does have a microphone, a canvas it can film, and a
+ *  MediaRecorder that writes WebM - which covers the same ground as long
+ *  as you are happy with WebM instead of MP4.
+ * ===================================================================== */
+"use strict";
+
+/* ---------------------------------------------------------- microphone */
+const mic = { stream: null, recorder: null, chunks: [], buf: null,
+              started: 0, timer: null, meter: null, analyser: null };
+
+function micSupported() {
+  return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia &&
+            window.MediaRecorder);
+}
+
+function openRecorder() {
+  $("recVeil").hidden = false;
+  $("recNote").textContent = micSupported()
+    ? ""
+    : "This browser will not hand a page the microphone. On a page you host "
+    + "yourself it works; inside a preview frame it is usually blocked.";
+  $("recGo").disabled = !micSupported();
+  $("recKeep").disabled = !mic.buf;
+}
+
+function closeRecorder() {
+  stopMic();
+  $("recVeil").hidden = true;
+}
+
+function stopMic() {
+  if (mic.recorder && mic.recorder.state === "recording") mic.recorder.stop();
+  if (mic.stream) mic.stream.getTracks().forEach((t) => t.stop());
+  mic.stream = null;
+  clearInterval(mic.timer);
+  cancelAnimationFrame(mic.meter);
+  mic.meter = null;
+}
+
+async function toggleMic() {
+  if (mic.recorder && mic.recorder.state === "recording") {
+    $("recGo").textContent = "Start recording";
+    $("recGo").classList.add("primary");
+    stopMic();
+    return;
+  }
+  try {
+    mic.stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+    });
+  } catch (err) {
+    $("recState").textContent = err && err.name === "NotAllowedError"
+      ? "Permission was refused, so there is nothing to record."
+      : "No microphone was available: " + (err && err.message || err);
+    return;
+  }
+  $("recState").textContent = "Recording. Press stop when you are done.";
+  $("recGo").textContent = "Stop";
+  $("recGo").classList.remove("primary");
+  mic.chunks = [];
+  mic.recorder = new MediaRecorder(mic.stream);
+  mic.recorder.ondataavailable = (e) => { if (e.data.size) mic.chunks.push(e.data); };
+  mic.recorder.onstop = async () => {
+    try {
+      const blob = new Blob(mic.chunks, { type: mic.recorder.mimeType || "audio/webm" });
+      mic.buf = await decodeToMono(await blob.arrayBuffer());
+      $("recState").textContent =
+        `Recorded ${fmtLong(mic.buf.length / SR)}. Add it to the timeline, or record again.`;
+      $("recKeep").disabled = false;
+    } catch (err) {
+      $("recState").textContent = "That recording could not be read back: " + err.message;
+    }
+  };
+  mic.recorder.start();
+  mic.started = Date.now();
+  $("recClock").textContent = "0:00";
+  mic.timer = setInterval(() => {
+    $("recClock").textContent = fmt((Date.now() - mic.started) / 1000);
+  }, 200);
+  drawMeter();
+}
+
+function drawMeter() {
+  const canvas = $("recMeter"), c2 = canvas.getContext("2d");
+  const node = ctx().createMediaStreamSource(mic.stream);
+  const analyser = ctx().createAnalyser();
+  analyser.fftSize = 1024;
+  node.connect(analyser);                       // analyser only: no feedback loop
+  const data = new Uint8Array(analyser.fftSize);
+  const paint = () => {
+    if (!mic.stream) return;
+    analyser.getByteTimeDomainData(data);
+    c2.fillStyle = "#15171c";
+    c2.fillRect(0, 0, canvas.width, canvas.height);
+    c2.strokeStyle = "#4da3ff";
+    c2.lineWidth = 2;
+    c2.beginPath();
+    for (let i = 0; i < data.length; i++) {
+      const x = (i / data.length) * canvas.width;
+      const y = (data[i] / 255) * canvas.height;
+      i ? c2.lineTo(x, y) : c2.moveTo(x, y);
+    }
+    c2.stroke();
+    mic.meter = requestAnimationFrame(paint);
+  };
+  paint();
+}
+
+/** Decode any container the browser knows, down to one 44.1 kHz channel. */
+async function decodeToMono(bytes) {
+  const shop = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 1, SR);
+  const decoded = await shop.decodeAudioData(bytes);
+  const n = decoded.length;
+  const mono = new Float32Array(n);
+  for (let ch = 0; ch < decoded.numberOfChannels; ch++) {
+    const data = decoded.getChannelData(ch);
+    for (let i = 0; i < n; i++) mono[i] += data[i];
+  }
+  if (decoded.numberOfChannels > 1) {
+    for (let i = 0; i < n; i++) mono[i] /= decoded.numberOfChannels;
+  }
+  return mono;
+}
+
+function keepRecording() {
+  if (!mic.buf) return;
+  let index = app.tracks.findIndex((t) => t.name === "Microphone");
+  if (index < 0) { app.tracks.push(newTrack("Microphone")); index = app.tracks.length - 1; }
+  app.cur = index;
+  const n = app.tracks[index].clips.length + 1;
+  addClip(makeClip("Take " + n, mic.buf, app.playhead, { type: "file" }, 4), index);
+  mic.buf = null;
+  $("recKeep").disabled = true;
+  closeRecorder();
+  toast(`Added take ${n} to Microphone`);
+}
+
+/* ------------------------------------------------------- video & audio */
+function pickMime(kinds) {
+  for (const type of kinds) {
+    if (window.MediaRecorder && MediaRecorder.isTypeSupported(type)) return type;
+  }
+  return "";
+}
+const AUDIO_MIMES = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"];
+const VIDEO_MIMES = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
+
+/**
+ * Play a finished mix into a MediaRecorder, optionally filming a canvas at
+ * the same time. This happens in real time - a three minute song takes three
+ * minutes - because that is how a browser encodes.
+ */
+function recordMix(buffer, opts) {
+  return new Promise((resolve, reject) => {
+    const withPicture = !!opts.canvas;
+    const mime = pickMime(withPicture ? VIDEO_MIMES : AUDIO_MIMES);
+    if (!mime) { reject(new Error("this browser cannot record that format")); return; }
+
+    const sink = audio.createMediaStreamDestination();
+    const source = audio.createBufferSource();
+    source.buffer = buffer;
+    source.connect(sink);
+
+    const stream = withPicture
+      ? new MediaStream([...opts.canvas.captureStream(opts.fps || 30).getVideoTracks(),
+                         ...sink.stream.getAudioTracks()])
+      : sink.stream;
+
+    const chunks = [];
+    const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 4_000_000 });
+    rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    rec.onerror = (e) => reject(e.error || new Error("recording failed"));
+    rec.onstop = () => resolve(new Blob(chunks, { type: mime.split(";")[0] }));
+
+    let raf = 0;
+    const began = audio.currentTime;
+    const tickFrame = () => {
+      const at = audio.currentTime - began;
+      if (opts.paint) opts.paint(Math.min(at, buffer.duration));
+      if (opts.onProgress) opts.onProgress(Math.min(1, at / buffer.duration));
+      if (at < buffer.duration) raf = requestAnimationFrame(tickFrame);
+    };
+    source.onended = () => {
+      cancelAnimationFrame(raf);
+      setTimeout(() => { if (rec.state !== "inactive") rec.stop(); }, 220);
+    };
+    rec.start(250);
+    source.start();
+    tickFrame();
+  });
+}
+
+/** The picture that goes with the sound: the app's own waveform mark. */
+function makePainter(buffer, kind, w, h) {
+  const canvas = document.createElement("canvas");
+  canvas.width = w; canvas.height = h;
+  const c2 = canvas.getContext("2d");
+  const bars = 96;
+  const mono = buffer.getChannelData(0);
+  const peaks = new Float32Array(bars);
+  const per = Math.floor(mono.length / bars) || 1;
+  for (let b = 0; b < bars; b++) {
+    let peak = 0;
+    for (let i = b * per; i < Math.min(mono.length, (b + 1) * per); i += 32) {
+      const v = Math.abs(mono[i]);
+      if (v > peak) peak = v;
+    }
+    peaks[b] = peak;
+  }
+  const paint = (at) => {
+    const grad = c2.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, "#1b1f27");
+    grad.addColorStop(1, "#101218");
+    c2.fillStyle = grad;
+    c2.fillRect(0, 0, w, h);
+    if (kind === "plain") return;
+    const done = buffer.duration ? at / buffer.duration : 0;
+    const bw = (w * 0.76) / bars, left = w * 0.12, mid = h / 2, tall = h * 0.3;
+    for (let b = 0; b < bars; b++) {
+      const live = kind === "moving" && b / bars <= done;
+      const wobble = kind === "moving"
+        ? 0.55 + 0.45 * Math.abs(Math.sin(at * 3 + b * 0.35)) : 1;
+      const bh = Math.max(3, peaks[b] * tall * (live ? wobble : 1));
+      c2.fillStyle = live ? "#4da3ff" : "#39435a";
+      c2.fillRect(left + b * bw, mid - bh, Math.max(1, bw - 2), bh * 2);
+    }
+    c2.fillStyle = "#e8eaed";
+    c2.font = `600 ${Math.round(h / 22)}px ui-sans-serif,system-ui,sans-serif`;
+    c2.fillText("Music Studio", left, h * 0.88);
+  };
+  paint(0);
+  return { canvas, paint };
+}
+
+/* --------------------------------------------------------------- export */
+function openExport() {
+  $("expVeil").hidden = false;
+  syncExport();
+}
+function syncExport() {
+  const video = $("expFmt").value === "webm-video";
+  $("expPic").hidden = !video;
+  const end = songEnd();
+  $("expNote").textContent = $("expFmt").value === "wav"
+    ? "Written straight out. Instant, and the best quality."
+    : `Recorded as it plays, so this takes about ${fmt(end)} - the length of the song.`;
+}
+
+async function runExport() {
+  if (songEnd() <= 0) { toast("Nothing to export yet"); return; }
+  const fmtKind = $("expFmt").value;
+  $("expGo").disabled = true;
+  try {
+    await ctx().resume();
+    status("Rendering the mix", "loading");
+    const buffer = await buildMix();
+    if (fmtKind === "wav") {
+      const saved = await download(wavBytes(buffer), "music-studio-mix.wav");
+      toast(saved ? "Saved to your downloads" : "Save cancelled");
+    } else {
+      const video = fmtKind === "webm-video";
+      let painter = null;
+      if (video) {
+        const [w, h] = $("expSize").value.split("x").map(Number);
+        painter = makePainter(buffer, $("expPicKind").value, w, h);
+      }
+      $("expBar").hidden = false;
+      status(video ? "Filming the mix" : "Encoding the mix", "loading");
+      const blob = await recordMix(buffer, {
+        canvas: painter && painter.canvas,
+        paint: painter && painter.paint,
+        fps: 30,
+        onProgress: (p) => { $("expFill").style.width = (p * 100).toFixed(1) + "%"; },
+      });
+      const saved = await download(blob, video ? "music-studio-mix.webm"
+                                              : "music-studio-mix-audio.webm");
+      toast(saved ? "Saved to your downloads" : "Save cancelled");
+    }
+  } catch (err) {
+    toast("Export failed: " + err.message);
+  } finally {
+    $("expGo").disabled = false;
+    $("expBar").hidden = true;
+    $("expFill").style.width = "0";
+    status("Sound engine ready", "ready");
+  }
+}
+
+/* ------------------------------------------------------------ converter */
+const convert = { files: [] };
+
+function openConvert() { $("convVeil").hidden = false; drawConvList(); }
+function drawConvList() {
+  const list = $("convList");
+  list.innerHTML = "";
+  for (const file of convert.files) {
+    const row = document.createElement("li");
+    row.style.cssText = "display:flex;gap:9px;align-items:center;color:#878d9b";
+    row.innerHTML = `<span style="color:#e8eaed;overflow:hidden;text-overflow:ellipsis;
+      white-space:nowrap;flex:1">${file.name}</span>
+      <span>${(file.size / 1048576).toFixed(1)} MB</span>`;
+    list.appendChild(row);
+  }
+  $("convGo").disabled = !convert.files.length;
+}
+
+async function runConvert() {
+  const kind = $("convFmt").value;
+  $("convGo").disabled = true;
+  let done = 0;
+  for (const file of convert.files) {
+    try {
+      status(`Converting ${file.name}`, "loading");
+      await ctx().resume();
+      const mono = await decodeToMono(await file.arrayBuffer());
+      const buffer = ctx().createBuffer(2, mono.length, SR);
+      buffer.copyToChannel(mono, 0);
+      buffer.copyToChannel(mono, 1);
+      const stem = file.name.replace(/\.[^.]+$/, "");
+      if (kind === "wav") {
+        await download(wavBytes(buffer), stem + ".wav");
+      } else {
+        const video = kind === "webm-video";
+        const painter = video ? makePainter(buffer, "moving", 1280, 720) : null;
+        const blob = await recordMix(buffer, {
+          canvas: painter && painter.canvas, paint: painter && painter.paint, fps: 30,
+        });
+        await download(blob, stem + (video ? ".webm" : "-audio.webm"));
+      }
+      done++;
+    } catch (err) {
+      toast(`Could not convert ${file.name}: ${err.message}`);
+    }
+  }
+  status("Sound engine ready", "ready");
+  $("convGo").disabled = false;
+  if (done) toast(`Converted ${done} file${done > 1 ? "s" : ""}`);
+}
+
+/* ------------------------------------------------------------- wiring */
+$("bRec").onclick = openRecorder;
+$("recGo").onclick = toggleMic;
+$("recKeep").onclick = keepRecording;
+$("recClose").onclick = closeRecorder;
+$("bWav").onclick = openExport;
+$("expFmt").onchange = syncExport;
+$("expGo").onclick = runExport;
+$("expClose").onclick = () => { $("expVeil").hidden = true; };
+$("bConv").onclick = openConvert;
+$("convPick").onclick = () => $("fileConv").click();
+$("fileConv").onchange = (e) => {
+  convert.files = [...e.target.files];
+  e.target.value = "";
+  drawConvList();
+};
+$("convGo").onclick = runConvert;
+$("convClose").onclick = () => { $("convVeil").hidden = true; };
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  for (const id of ["recVeil", "expVeil", "convVeil"]) {
+    if (!$(id).hidden) { id === "recVeil" ? closeRecorder() : ($(id).hidden = true); }
+  }
+});
+if (!micSupported()) $("bRec").title = "This browser will not give a page the microphone";
+</script>
+</body>
+</html>
